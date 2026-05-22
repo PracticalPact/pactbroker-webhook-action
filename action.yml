@@ -1,0 +1,21 @@
+name: Ensure Provider Webhooks
+description: Ensures Pact Broker webhooks exist for consumers
+
+inputs:
+  brokerUrl:
+    description: Pact Broker URL
+    required: true
+
+  githubToken:
+    description: Github Token to allow webhooks
+    required: true
+
+  providerName:
+    description: Provider name
+    required: true
+
+
+
+runs:
+  using: node20
+  main: index.js
