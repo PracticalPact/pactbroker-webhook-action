@@ -137,7 +137,7 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
 
 async function run() {
     try {
-        const brokerUrl = core.getInput("brokerUrl");
+        const brokerUrl = core.getInput("brokerUrl").replace(/\/+$/, "");
 
         const githubRepo = process.env.GITHUB_REPOSITORY;
         const githubUrl = `https://api.github.com/repos/${githubRepo}`;
