@@ -1,0 +1,29 @@
+name: "can-i-deploy"
+description: "Checks if this application version is safe to deploy"
+inputs:
+  brokerUrl:
+    description: "Pact broker URL"
+    required: true
+  brokerToken:
+    description: "Pact broker token"
+    required: true
+  applicationName:
+    description: "Name of your application"
+    required: true
+  version:
+    description: "Version (commit SHA) of your application"
+    required: true
+  toEnvironment:
+    description: "Environment you want to deploy to"
+    required: true
+  retryWhileUnknown:
+    description: "Number of times to retry while verification is unknown"
+    required: false
+    default: "0"
+  retryInterval:
+    description: "Seconds between retries"
+    required: false
+    default: "10"
+runs:
+  using: "node20"
+  main: "index.js"
