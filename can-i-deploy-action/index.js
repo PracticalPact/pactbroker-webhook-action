@@ -5,7 +5,7 @@ function getInput(name) {
 async function check(brokerUrl, token, appName, version, toEnvironment) {
     const url = `${brokerUrl}/matrix?q[][pacticipant]=${encodeURIComponent(appName)}&q[][version]=${encodeURIComponent(version)}&latestby=cvpv&environment=${encodeURIComponent(toEnvironment)}`;
     const response = await fetch(url, {
-        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/hal+json, application/json, */*" }
     });
     if (!response.ok) {
         const text = await response.text();
