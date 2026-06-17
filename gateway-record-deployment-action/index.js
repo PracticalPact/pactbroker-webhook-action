@@ -21,19 +21,30 @@ async function brokerRequest(url, token, method = "GET", body = null) {
     return response.json();
 }
 
-async function getGatewayParticipants(brokerUrl, token, gatewayName) {
+async function getGatewayDownstreams(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}->`) || name.endsWith(`->${gatewayName}`));
+        .filter(name => name.startsWith(`${gatewayName}->`));
 }
 
-async function getLatestVersion(brokerUrl, token, participantName) {
+async function getGatewayConsumers(brokerUrl, token, gatewayName) {
+    const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
+    return (data._embedded?.pacticipants || [])
+        .map(p => p.name)
+        .filter(name => name.endsWith(`->${gatewayName}`));
+}
+
+// Find the composite version ending in -{gwSha} for a consumer participant
+async function findCompositeVersion(brokerUrl, token, participantName, gwSha) {
     const data = await brokerRequest(
-        `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}/versions/latest`,
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}/versions`,
         token
     );
-    return data.number;
+    const versions = data._embedded?.versions || [];
+    const match = versions.find(v => v.number?.endsWith(`-${gwSha}`));
+    if (!match) throw new Error(`No composite version found for ${participantName} ending in -${gwSha}`);
+    return match.number;
 }
 
 async function recordDeployment(brokerUrl, token, participantName, version, environment) {
@@ -43,22 +54,34 @@ async function recordDeployment(brokerUrl, token, participantName, version, envi
         "POST",
         { environment }
     );
-    console.log(`✅ Recorded deployment for ${participantName}@${version} to ${environment}`);
+    console.log(`✅ Recorded ${participantName}@${version} to ${environment}`);
 }
 
 async function run() {
     const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
     const token = getInput("brokerToken");
     const gatewayName = getInput("applicationName");
+    const gwSha = getInput("version");
     const environment = getInput("environment");
 
-    const participants = await getGatewayParticipants(brokerUrl, token, gatewayName);
-    console.log(`Found participants: ${participants.join(", ") || "none"}`);
+    const [downstreams, consumers] = await Promise.all([
+        getGatewayDownstreams(brokerUrl, token, gatewayName),
+        getGatewayConsumers(brokerUrl, token, gatewayName)
+    ]);
 
-    await Promise.all(participants.map(async (name) => {
-        const version = await getLatestVersion(brokerUrl, token, name);
-        await recordDeployment(brokerUrl, token, name, version, environment);
-    }));
+    console.log(`Downstreams: ${downstreams.join(", ") || "none"}`);
+    console.log(`Consumers: ${consumers.join(", ") || "none"}`);
+
+    await Promise.all([
+        // Gateway->X: record at gwSha directly
+        ...downstreams.map(name => recordDeployment(brokerUrl, token, name, gwSha, environment)),
+
+        // X->Gateway: find composite version ending in -{gwSha}
+        ...consumers.map(async name => {
+            const version = await findCompositeVersion(brokerUrl, token, name, gwSha);
+            return recordDeployment(brokerUrl, token, name, version, environment);
+        })
+    ]);
 }
 
 run().catch(e => {

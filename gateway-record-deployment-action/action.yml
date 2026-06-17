@@ -10,6 +10,9 @@ inputs:
   applicationName:
     description: "Name of the gateway application"
     required: true
+  version: 
+    description: "Version (commit SHA) of the gateway application"
+    required: true
   environment:
     description: "Environment being deployed to"
     required: true
