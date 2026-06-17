@@ -80,6 +80,7 @@ async function fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvi
     );
 }
 
+// Creates the new row in Matrix 2
 async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent) {
     await brokerRequest(`${brokerUrl}/publish`, token, "POST", {
         pacticipantName: consumerGwName,
@@ -96,6 +97,7 @@ async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, p
     console.log(`Published ${consumerGwName}@${compositeVersion}`);
 }
 
+// For each Gateway->X: gets gwSha, builds composite version, fetches and republishes pact, runs canIDeploy
 async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval) {
     const consumerGwName = `${consumerName}->${gatewayName}`;
     const gatewayProviders = await getGatewayProviderNames(brokerUrl, token, gatewayName);
