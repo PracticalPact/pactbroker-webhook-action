@@ -1,0 +1,18 @@
+name: "gateway-record-deployment"
+description: "Records deployment for all gateway-related participants"
+inputs:
+  brokerUrl:
+    description: "Pact broker URL"
+    required: true
+  brokerToken:
+    description: "Pact broker token"
+    required: true
+  applicationName:
+    description: "Name of the gateway application"
+    required: true
+  environment:
+    description: "Environment being deployed to"
+    required: true
+runs:
+  using: "node20"
+  main: "index.js"
