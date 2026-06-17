@@ -1,5 +1,5 @@
 name: "can-i-deploy-consumer"
-description: "Checks can-i-deploy for a consumer across all gateway-transformed pairs"
+description: "Checks can-i-deploy for a consumer, optionally including gateway-transformed pairs"
 inputs:
   brokerUrl:
     description: "Pact broker URL"
@@ -14,8 +14,9 @@ inputs:
     description: "Version (commit SHA) of the consumer"
     required: true
   gatewayName:
-    description: "Name of the gateway (e.g. Gateway)"
-    required: true
+    description: "Name of the gateway (e.g. Gateway). If omitted, only standard can-i-deploy is run."
+    required: false
+    default: ""
   toEnvironment:
     description: "Environment you want to deploy to"
     required: true
