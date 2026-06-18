@@ -30,13 +30,14 @@ async function run() {
     });
 
     console.log(`Status: ${response.status}`);
-    const data = await response.json();
-    console.log("Response:", JSON.stringify(data));
+    const text = await response.text();
+    console.log("Response:", text);
 
     if (!response.ok) {
-        const text = await response.text();
         throw new Error(`Failed to record deployment: ${response.status}\n${text}`);
     }
+
+    console.log(`✅ Recorded ${appName}@${version} to ${environment}`);
 
     console.log(`✅ Recorded ${appName}@${version} to ${environment}`);
 } 
