@@ -1,0 +1,18 @@
+name: "record-deployment"
+description: "Records a deployment in the Pact Broker"
+inputs:
+  brokerUrl:
+    description: "Pact Broker URL"
+    required: true
+  applicationName:
+    description: "Application name"
+    required: true
+  version:
+    description: "Version (commit SHA)"
+    required: true
+  environment:
+    description: "Environment being deployed to"
+    required: true
+runs:
+  using: "node20"
+  main: "index.js"
