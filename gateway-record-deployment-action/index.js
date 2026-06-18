@@ -25,14 +25,14 @@ async function getGatewayDownstreams(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}->`));
+        .filter(name => name.startsWith(`${gatewayName}---`));
 }
 
 async function getGatewayConsumers(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.endsWith(`->${gatewayName}`));
+        .filter(name => name.endsWith(`---${gatewayName}`));
 }
 
 // Find the composite version ending in -{gwSha} for a consumer participant
