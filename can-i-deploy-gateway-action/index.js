@@ -21,7 +21,7 @@ async function getGatewayDownstreamNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}---`));
+        .filter(name => name.startsWith(`${gatewayName}--`));
 }
 
 // Find all Consumer->Gateway participants (consumers of the gateway)
@@ -29,7 +29,7 @@ async function getGatewayConsumerNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.endsWith(`---${gatewayName}`));
+        .filter(name => name.endsWith(`--${gatewayName}`));
 }
 
 async function canIDeployLatest(brokerUrl, token, appName, toEnvironment, retryWhileUnknown, retryInterval) {

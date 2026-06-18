@@ -52,7 +52,7 @@ async function getGatewayProviderNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}---`));
+        .filter(name => name.startsWith(`${gatewayName}--`));
 }
 
 async function getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName) {
@@ -99,12 +99,12 @@ async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, p
 
 // For each Gateway->X: gets gwSha, builds composite version, fetches and republishes pact, runs canIDeploy
 async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval) {
-    const consumerGwName = `${consumerName}---${gatewayName}`;
+    const consumerGwName = `${consumerName}--${gatewayName}`;
     const gatewayProviders = await getGatewayProviderNames(brokerUrl, token, gatewayName);
     console.log(`Found ${gatewayProviders.length} gateway providers: ${gatewayProviders.join(", ") || "none"}`);
 
     return Promise.all(gatewayProviders.map(async (gatewayProviderName) => {
-        const downstreamProvider = gatewayProviderName.split("---").slice(1).join("---");
+        const downstreamProvider = gatewayProviderName.split("--").slice(1).join("--");
 
         const gwSha = await getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName);
         const compositeVersion = `${consumerVersion}-${gwSha}`;
