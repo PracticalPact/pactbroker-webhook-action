@@ -16,14 +16,22 @@ async function run() {
     const environment = getInput("environment");
 
     const uuid = await getEnvironmentUuid(brokerUrl, environment);
+    console.log(`Environment UUID: ${uuid}`);
+
 
     const url = `${brokerUrl}/pacticipants/${encodeURIComponent(appName)}/versions/${encodeURIComponent(version)}/deployed-versions/environment/${uuid}`;
+    console.log(`POST to: ${url}`);
+
 
     const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({})
     });
+
+    console.log(`Status: ${response.status}`);
+    const data = await response.json();
+    console.log("Response:", JSON.stringify(data));
 
     if (!response.ok) {
         const text = await response.text();
