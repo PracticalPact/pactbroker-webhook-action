@@ -29,14 +29,9 @@ async function run() {
         body: JSON.stringify({})
     });
 
-    process.stdout.write(`Status: ${response.status}`);
     const text = await response.text();
-    process.stdout.write("Response:", text);
 
     if (!response.ok) {
         throw new Error(`Failed to record deployment: ${response.status}\n${text}`);
     }
-
-
-    process.stdout.write(`✅ Recorded ${appName}@${version} to ${environment}`);
 } 
