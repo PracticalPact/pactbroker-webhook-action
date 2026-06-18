@@ -21,21 +21,28 @@ async function brokerRequest(url, token, method = "GET", body = null) {
     return response.json();
 }
 
+async function getEnvironmentUuid(brokerUrl, token, environment) {
+    const data = await brokerRequest(`${brokerUrl}/environments`, token);
+    const env = (data._embedded?.environments || [])
+        .find(e => e.name === environment);
+    if (!env) throw new Error(`Environment ${environment} not found`);
+    return env.uuid;
+}
+
 async function getGatewayDownstreams(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}->`));
+        .filter(name => name.startsWith(`${gatewayName}---`));
 }
 
 async function getGatewayConsumers(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
         .map(p => p.name)
-        .filter(name => name.endsWith(`->${gatewayName}`));
+        .filter(name => name.endsWith(`---${gatewayName}`));
 }
 
-// Find the composite version ending in -{gwSha} for a consumer participant
 async function findCompositeVersion(brokerUrl, token, participantName, gwSha) {
     const data = await brokerRequest(
         `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}/versions`,
@@ -47,12 +54,12 @@ async function findCompositeVersion(brokerUrl, token, participantName, gwSha) {
     return match.number;
 }
 
-async function recordDeployment(brokerUrl, token, participantName, version, environment) {
+async function recordDeployment(brokerUrl, token, participantName, version, environmentUuid, environment) {
     await brokerRequest(
-        `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}/versions/${encodeURIComponent(version)}/deployed-versions`,
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}/versions/${encodeURIComponent(version)}/deployed-versions/environment/${environmentUuid}`,
         token,
         "POST",
-        { environment }
+        {}
     );
     console.log(`✅ Recorded ${participantName}@${version} to ${environment}`);
 }
@@ -64,22 +71,23 @@ async function run() {
     const gwSha = getInput("version");
     const environment = getInput("environment");
 
-    const [downstreams, consumers] = await Promise.all([
+    const [downstreams, consumers, environmentUuid] = await Promise.all([
         getGatewayDownstreams(brokerUrl, token, gatewayName),
-        getGatewayConsumers(brokerUrl, token, gatewayName)
+        getGatewayConsumers(brokerUrl, token, gatewayName),
+        getEnvironmentUuid(brokerUrl, token, environment)
     ]);
 
     console.log(`Downstreams: ${downstreams.join(", ") || "none"}`);
     console.log(`Consumers: ${consumers.join(", ") || "none"}`);
+    console.log(`Environment UUID: ${environmentUuid}`);
 
     await Promise.all([
-        // Gateway->X: record at gwSha directly
-        ...downstreams.map(name => recordDeployment(brokerUrl, token, name, gwSha, environment)),
-
-        // X->Gateway: find composite version ending in -{gwSha}
+        ...downstreams.map(name =>
+            recordDeployment(brokerUrl, token, name, gwSha, environmentUuid, environment)
+        ),
         ...consumers.map(async name => {
             const version = await findCompositeVersion(brokerUrl, token, name, gwSha);
-            return recordDeployment(brokerUrl, token, name, version, environment);
+            return recordDeployment(brokerUrl, token, name, version, environmentUuid, environment);
         })
     ]);
 }
