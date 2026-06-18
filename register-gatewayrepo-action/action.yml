@@ -1,18 +1,14 @@
 name: "register-gatewayrepo-action"
-description: "Registers repository URL for all gateway-related Pact participants"
-
+description: "Ensures Pact Broker webhooks exist for all gateway-related participants"
 inputs:
   brokerUrl:
     description: "Pact Broker URL"
     required: true
-  brokerToken:
-    description: "Pact Broker token"
+  githubToken:
+    description: "GitHub token to allow webhooks"
     required: true
   gatewayName:
     description: "Gateway application name"
-    required: true
-  repositoryUrl:
-    description: "GitHub repository URL"
     required: true
 runs:
   using: "node20"
