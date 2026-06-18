@@ -1,41 +1,33 @@
-async function brokerRequest(url, method = "GET", body = null) {
-    const options = {
-        method,
-        headers: {
-            "Accept": "application/hal+json, application/json, */*",
-            "Content-Type": "application/merge-patch+json"
-        }
-    };
-    if (body) options.body = JSON.stringify(body);
-
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Broker error ${response.status}: ${text}`);
-    }
-    return response;
+function getInput(name) {
+    return process.env[`INPUT_${name.toUpperCase()}`];
 }
 
 async function run() {
-    const brokerUrl = process.env.BROKER_URL.replace(/\/+$/, "");
-    const gatewayName = process.env.REPOSITORY_NAME;
+    const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
+    const gatewayName = getInput("gatewayName");
     const repoUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}`;
 
-    const response = await brokerRequest(`${brokerUrl}/pacticipants`);
+    const response = await fetch(`${brokerUrl}/pacticipants`, {
+        headers: { "Accept": "application/hal+json, application/json, */*" }
+    });
     const data = await response.json();
 
     const participants = (data._embedded?.pacticipants || [])
         .map(p => p.name)
         .filter(name => name.startsWith(`${gatewayName}---`) || name.endsWith(`---${gatewayName}`));
 
-    console.log(`Found ${participants.length} participants to register: ${participants.join(", ") || "none"}`);
+    console.log(`Found ${participants.length} participants: ${participants.join(", ") || "none"}`);
 
     for (const name of participants) {
-        await brokerRequest(
-            `${brokerUrl}/pacticipants/${encodeURIComponent(name)}`,
-            "PATCH",
-            { repositoryUrl: repoUrl, mainBranch: "main" }
-        );
+        const res = await fetch(`${brokerUrl}/pacticipants/${encodeURIComponent(name)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/merge-patch+json" },
+            body: JSON.stringify({ repositoryUrl: repoUrl, mainBranch: "main" })
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Failed to register ${name}: ${res.status}\n${text}`);
+        }
         console.log(`Registered ${name} -> ${repoUrl}`);
     }
 }
