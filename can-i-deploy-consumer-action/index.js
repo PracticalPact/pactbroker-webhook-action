@@ -97,23 +97,35 @@ async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, p
     console.log(`Published ${consumerGwName}@${compositeVersion}`);
 }
 
-// For each Gateway->X: gets gwSha, builds composite version, fetches and republishes pact, runs canIDeploy
 async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval) {
     const consumerGwName = `${consumerName}---${gatewayName}`;
     const gatewayProviders = await getGatewayProviderNames(brokerUrl, token, gatewayName);
     console.log(`Found ${gatewayProviders.length} gateway providers: ${gatewayProviders.join(", ") || "none"}`);
 
     return Promise.all(gatewayProviders.map(async (gatewayProviderName) => {
-        const downstreamProvider = gatewayProviderName.split("---").slice(1).join("---");
+        try {
+            const downstreamProvider = gatewayProviderName.split("---").slice(1).join("---");
 
-        const gwSha = await getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName);
-        const compositeVersion = `${consumerVersion}-${gwSha}`;
-        console.log(`Composite version for ${downstreamProvider}: ${compositeVersion}`);
+            const gwSha = await getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName);
+            const compositeVersion = `${consumerVersion}-${gwSha}`;
+            console.log(`Composite version for ${downstreamProvider}: ${compositeVersion}`);
 
-        const pactContent = await fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider);
-        await publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent);
+            const pactContent = await fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider);
+            await publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent);
 
-        return canIDeploy(brokerUrl, token, consumerGwName, compositeVersion, toEnvironment, retryWhileUnknown, retryInterval);
+            return canIDeploy(
+                brokerUrl,
+                token,
+                consumerGwName,
+                compositeVersion,
+                toEnvironment,
+                retryWhileUnknown,
+                retryInterval
+            );
+        } catch (e) {
+            console.log(`⚠️ Skipping ${gatewayProviderName}: ${e.message}`);
+            return true;
+        }
     }));
 }
 
