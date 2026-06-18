@@ -16,11 +16,11 @@ async function run() {
     const environment = getInput("environment");
 
     const uuid = await getEnvironmentUuid(brokerUrl, environment);
-    console.log(`Environment UUID: ${uuid}`);
+    process.stdout.write(`Environment UUID: ${uuid}`);
 
 
     const url = `${brokerUrl}/pacticipants/${encodeURIComponent(appName)}/versions/${encodeURIComponent(version)}/deployed-versions/environment/${uuid}`;
-    console.log(`POST to: ${url}`);
+    process.stdout.write(`POST to: ${url}`);
 
 
     const response = await fetch(url, {
@@ -29,15 +29,14 @@ async function run() {
         body: JSON.stringify({})
     });
 
-    console.log(`Status: ${response.status}`);
+    process.stdout.write(`Status: ${response.status}`);
     const text = await response.text();
-    console.log("Response:", text);
+    process.stdout.write("Response:", text);
 
     if (!response.ok) {
         throw new Error(`Failed to record deployment: ${response.status}\n${text}`);
     }
 
-    console.log(`✅ Recorded ${appName}@${version} to ${environment}`);
 
-    console.log(`✅ Recorded ${appName}@${version} to ${environment}`);
+    process.stdout.write(`✅ Recorded ${appName}@${version} to ${environment}`);
 } 
