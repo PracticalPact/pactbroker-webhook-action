@@ -1,33 +1,21 @@
 name: "can-i-deploy-consumer"
-description: "Checks can-i-deploy for a consumer, optionally including gateway-transformed pairs"
+description: "Checks can-i-deploy for a consumer, including gateway-transformed pairs"
 inputs:
   brokerUrl:
-    description: "Pact broker URL"
+    description: "Pact Broker URL"
     required: true
   brokerToken:
-    description: "Pact broker token"
+    description: "Pact Broker token"
     required: true
   consumerName:
-    description: "Name of the consumer (e.g. Frontend)"
+    description: "Name of the consumer"
     required: true
   consumerVersion:
     description: "Version (commit SHA) of the consumer"
     required: true
-  gatewayName:
-    description: "Name of the gateway (e.g. Gateway). If omitted, only standard can-i-deploy is run."
-    required: false
-    default: ""
   toEnvironment:
     description: "Environment you want to deploy to"
     required: true
-  retryWhileUnknown:
-    description: "Number of times to retry while verification is unknown"
-    required: false
-    default: "0"
-  retryInterval:
-    description: "Seconds between retries"
-    required: false
-    default: "10"
 runs:
   using: "node20"
   main: "index.js"
