@@ -1,11 +1,8 @@
-name: "gateway-ensure-webhooks"
-description: "Ensures Pact Broker webhooks exist for all gateway-related participants"
+name: "gateway-register-participants"
+description: "Registers repository URL for all gateway-related participants in the Pact Broker"
 inputs:
   brokerUrl:
     description: "Pact Broker URL"
-    required: true
-  githubToken:
-    description: "GitHub token to allow webhooks"
     required: true
   gatewayName:
     description: "Gateway application name"
