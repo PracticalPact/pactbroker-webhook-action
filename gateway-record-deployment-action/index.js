@@ -86,8 +86,13 @@ async function run() {
             recordDeployment(brokerUrl, token, name, gwSha, environmentUuid, environment)
         ),
         ...consumers.map(async name => {
-            const version = await findCompositeVersion(brokerUrl, token, name, gwSha);
-            return recordDeployment(brokerUrl, token, name, version, environmentUuid, environment);
+            try {
+                const version = await findCompositeVersion(brokerUrl, token, name, gwSha);
+                return recordDeployment(brokerUrl, token, name, version, environmentUuid, environment);
+            } catch (e) {
+                console.log(`⚠️ Skipping ${name}: ${e.message}`);
+                return true;
+            }
         })
     ]);
 }
