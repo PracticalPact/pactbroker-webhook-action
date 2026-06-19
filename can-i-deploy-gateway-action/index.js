@@ -16,7 +16,6 @@ async function brokerRequest(url, token) {
     return response.json();
 }
 
-// Find all Gateway->X participants (downstream providers)
 async function getGatewayDownstreamNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
@@ -24,7 +23,6 @@ async function getGatewayDownstreamNames(brokerUrl, token, gatewayName) {
         .filter(name => name.startsWith(`${gatewayName}---`));
 }
 
-// Find all Consumer->Gateway participants (consumers of the gateway)
 async function getGatewayConsumerNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
@@ -72,18 +70,25 @@ async function run() {
     console.log(`Found ${downstreams.length} downstream participants: ${downstreams.join(", ") || "none"}`);
     console.log(`Found ${consumers.length} consumer participants: ${consumers.join(", ") || "none"}`);
 
-    const all = [...downstreams, ...consumers];
-
-    if (all.length === 0) {
+    if (downstreams.length === 0 && consumers.length === 0) {
         console.log("No participants to check, exiting.");
         return;
     }
 
-    const results = await Promise.all(
-        all.map(name => canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval))
+    // Downstreams must pass — they block deployment
+    const downstreamResults = await Promise.all(
+        downstreams.map(name => canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval))
     );
 
-    if (results.some(r => !r)) process.exit(1);
+    // Consumers are informational only — don't block deployment
+    await Promise.all(
+        consumers.map(async name => {
+            const ok = await canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval);
+            if (!ok) console.log(`⚠️ Consumer ${name} cannot deploy but not blocking gateway deployment`);
+        })
+    );
+
+    if (downstreamResults.some(r => !r)) process.exit(1);
 }
 
 run().catch(e => {
