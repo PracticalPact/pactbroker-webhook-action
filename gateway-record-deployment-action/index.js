@@ -82,16 +82,19 @@ async function run() {
     console.log(`Environment UUID: ${environmentUuid}`);
 
     await Promise.all([
-        ...downstreams.map(name =>
-            recordDeployment(brokerUrl, token, name, gwSha, environmentUuid, environment)
-        ),
+        ...downstreams.map(async name => {
+            try {
+                await recordDeployment(brokerUrl, token, name, gwSha, environmentUuid, environment);
+            } catch (e) {
+                console.log(`⚠️ Skipping downstream ${name}: ${e.message}`);
+            }
+        }),
         ...consumers.map(async name => {
             try {
                 const version = await findCompositeVersion(brokerUrl, token, name, gwSha);
-                return recordDeployment(brokerUrl, token, name, version, environmentUuid, environment);
+                await recordDeployment(brokerUrl, token, name, version, environmentUuid, environment);
             } catch (e) {
-                console.log(`⚠️ Skipping ${name}: ${e.message}`);
-                return true;
+                console.log(`⚠️ Skipping consumer ${name}: ${e.message}`);
             }
         })
     ]);
