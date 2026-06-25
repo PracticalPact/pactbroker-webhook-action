@@ -1,5 +1,5 @@
 function getInput(name) {
-    return process.env[`INPUT_${name.toUpperCase()}`];
+    return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
 const log = {
@@ -9,6 +9,11 @@ const log = {
         process.exit(1);
     }
 };
+
+function extractConsumerNameFromPactUrl(pactUrl) {
+    const match = pactUrl.match(/\/consumer\/([^/]+)/);
+    return match ? decodeURIComponent(match[1]) : "unknown-consumer";
+}
 
 async function githubRequest(path, method, body, token) {
     const response = await fetch(`https://api.github.com${path}`, {
@@ -34,10 +39,12 @@ async function ensureBranch(owner, repo, branch, fallback, token) {
         await githubRequest(`/repos/${owner}/${repo}/git/refs/heads/${branch}`, "GET", null, token);
     } catch {
         const fallbackRef = await githubRequest(`/repos/${owner}/${repo}/git/refs/heads/${fallback}`, "GET", null, token);
+
         await githubRequest(`/repos/${owner}/${repo}/git/refs`, "POST", {
             ref: `refs/heads/${branch}`,
             sha: fallbackRef.object.sha
         }, token);
+
         log.info(`Created base branch ${branch}`);
     }
 }
@@ -45,32 +52,42 @@ async function ensureBranch(owner, repo, branch, fallback, token) {
 async function run() {
     try {
         const githubToken = getInput("githubToken");
-        const consumerName = getInput("consumerName") || "unknown-consumer";
-        const consumerBranch = getInput("consumerVersionBranch");
-        const consumerVersion = getInput("consumerVersionNumber");
         const pactUrl = getInput("pactUrl");
-        const providerName = getInput("providerName");
+
+        const consumerName =
+            getInput("consumerName") ||
+            extractConsumerNameFromPactUrl(pactUrl);
+
+        const consumerBranch = getInput("consumerVersionBranch") || "unknown-branch";
+        const consumerVersion = getInput("consumerVersionNumber") || "unknown-version";
+        const providerName = getInput("providerName") || "unknown-provider";
         const baseBranch = getInput("baseBranch") || "main";
         const githubActor = getInput("githubActor") || "unknown-actor";
 
         const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
 
-        const safeName = consumerName.toLowerCase().replace(/[^a-z0-9]/g, "-");
-        const date = new Date().toISOString().replace(/[T:]/g, "-").replace(/\..+/, "");
+        const safeName = consumerName
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+        const date = new Date()
+            .toISOString()
+            .replace(/[T:]/g, "-")
+            .replace(/\..+/, "");
+
         const branchName = `pact-failed/${safeName}-${date}`;
 
-       await ensureBranch(owner, repo, baseBranch, "main", githubToken);
+        await ensureBranch(owner, repo, baseBranch, "main", githubToken);
 
         const ref = await githubRequest(`/repos/${owner}/${repo}/git/refs/heads/${baseBranch}`, "GET", null, githubToken);
         const sha = ref.object.sha;
 
-        // Create PR branch
         await githubRequest(`/repos/${owner}/${repo}/git/refs`, "POST", {
             ref: `refs/heads/${branchName}`,
             sha
         }, githubToken);
 
-        // Create a file on the branch so GitHub allows a PR
         const fileContent = Buffer.from(
             `Contract verification failed for ${consumerName} at ${new Date().toISOString()}\n`
         ).toString("base64");
@@ -81,7 +98,6 @@ async function run() {
             branch: branchName
         }, githubToken);
 
-        // Create PR
         const prBody = [
             `## Contract Verification Failed`,
             ``,
@@ -106,7 +122,6 @@ async function run() {
         }, githubToken);
 
         log.info(`PR created: ${pr.html_url}`);
-
     } catch (error) {
         log.setFailed(error?.message || "Unknown error");
     }
