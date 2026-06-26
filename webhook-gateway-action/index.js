@@ -54,7 +54,7 @@ async function hasWebhookAlready(brokerUrl, providerName, consumerName) {
     return false;
 }
 
-async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken) {
+async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken, githubActor) {
     const url =
         `${brokerUrl}/webhooks/provider/` +
         `${encodeURIComponent(providerName)}` +
@@ -75,7 +75,8 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
                 client_payload: {
                     pact_url: "${pactbroker.pactUrl}",
                     sha: "${pactbroker.providerVersionNumber}",
-                    branch: "${pactbroker.providerVersionBranch}"
+                    branch: "${pactbroker.providerVersionBranch}",
+                    github_actor: githubActor
                 }
             }
         }
@@ -98,7 +99,7 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
     console.log(`Webhook created for ${consumerName} -> ${providerName}`);
 }
 
-async function processProvider(brokerUrl, githubUrl, providerName, githubToken) {
+async function processProvider(brokerUrl, githubUrl, providerName, githubToken, githubActor) {
     core.info(`Loading pacts for provider ${providerName}`);
     const providerResponse = await getJson(`${brokerUrl}/pacts/provider/${encodeURIComponent(providerName)}`);
     const pactEntries = providerResponse?._links?.["pb:pacts"] || [];
@@ -113,7 +114,7 @@ async function processProvider(brokerUrl, githubUrl, providerName, githubToken) 
     for (const consumerName of uniqueConsumers) {
         const exists = await hasWebhookAlready(brokerUrl, providerName, consumerName);
         if (exists) continue;
-        await createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken);
+        await createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken, githubActor);
     }
 }
 
@@ -122,10 +123,10 @@ async function run() {
         const brokerUrl = core.getInput("brokerUrl").replace(/\/+$/, "");
         const githubRepo = process.env.GITHUB_REPOSITORY;
         const githubUrl = `https://api.github.com/repos/${githubRepo}`;
+        const githubActor = process.env.GITHUB_ACTOR || "unknown-actor";
         const githubToken = core.getInput("githubToken");
         const gatewayName = core.getInput("gatewayName");
 
-        // Discover all Gateway---X and X---Gateway participants
         const data = await getJson(`${brokerUrl}/pacticipants`);
         const providerNames = (data._embedded?.pacticipants || [])
             .map(p => p.name)
@@ -134,7 +135,7 @@ async function run() {
         core.info(`Found ${providerNames.length} gateway participants: ${providerNames.join(", ") || "none"}`);
 
         for (const providerName of providerNames) {
-            await processProvider(brokerUrl, githubUrl, providerName, githubToken);
+            await processProvider(brokerUrl, githubUrl, providerName, githubToken, githubActor);
         }
 
     } catch (error) {

@@ -14,9 +14,7 @@ const core = {
 async function getJson(url) {
     const response = await fetch(url, {
         method: "GET",
-        headers: {
-            Accept: "application/hal+json, application/json, */*"
-        }
+        headers: { Accept: "application/hal+json, application/json, */*" }
     });
 
     if (!response.ok) {
@@ -44,8 +42,8 @@ async function hasWebhookAlready(brokerUrl, providerName, consumerName) {
 
         core.info(`Inspecting webhook ${href}`);
         const webhookDetail = await getJson(href);
-        const events = webhookDetail.events || [];
-        const found = events.some(e => e.name === "contract_requiring_verification_published");
+        const found = (webhookDetail.events || [])
+            .some(e => e.name === "contract_requiring_verification_published");
 
         if (found) {
             core.info(`Valid webhook exists for ${consumerName}`);
@@ -56,7 +54,7 @@ async function hasWebhookAlready(brokerUrl, providerName, consumerName) {
     return false;
 }
 
-async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken) {
+async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken, githubActor) {
     const url =
         `${brokerUrl}/webhooks/provider/` +
         `${encodeURIComponent(providerName)}` +
@@ -77,7 +75,8 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
                 client_payload: {
                     pact_url: "${pactbroker.pactUrl}",
                     sha: "${pactbroker.providerVersionNumber}",
-                    branch: "${pactbroker.providerVersionBranch}"
+                    branch: "${pactbroker.providerVersionBranch}",
+                    github_actor: githubActor
                 }
             }
         }
@@ -105,6 +104,7 @@ async function run() {
         const brokerUrl = core.getInput("brokerUrl").replace(/\/+$/, "");
         const githubRepo = process.env.GITHUB_REPOSITORY;
         const githubUrl = `https://api.github.com/repos/${githubRepo}`;
+        const githubActor = process.env.GITHUB_ACTOR || "unknown-actor";
         const githubToken = core.getInput("githubToken");
         const providerName = core.getInput("providerName");
 
@@ -122,7 +122,7 @@ async function run() {
         for (const consumerName of uniqueConsumers) {
             const exists = await hasWebhookAlready(brokerUrl, providerName, consumerName);
             if (exists) continue;
-            await createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken);
+            await createWebhook(brokerUrl, githubUrl, providerName, consumerName, githubToken, githubActor);
         }
 
     } catch (error) {

@@ -100,16 +100,6 @@ async function run() {
             sha
         }, githubToken);
 
-        const fileContent = Buffer.from(
-            `Contract verification failed for ${consumerName} at ${new Date().toISOString()}\n`
-        ).toString("base64");
-
-        await githubRequest(`/repos/${owner}/${repo}/contents/pact-failures/${safeName}.txt`, "PUT", {
-            message: `[Pact] Contract verification failed: ${consumerName}`,
-            content: fileContent,
-            branch: branchName
-        }, githubToken);
-
         // Fetch and store pact content
         const pactContent = await fetchPact(pactUrl);
         const pactFileContent = Buffer.from(pactContent).toString("base64");
