@@ -30,6 +30,10 @@ inputs:
     description: Branch to open the PR against
     required: true
     default: main
+
+  githubActor:
+    description: GitHub actor (user) who triggered the workflow
+    required: false
  
 runs:
   using: node24
