@@ -10,6 +10,18 @@ const log = {
     }
 };
 
+// Fetch the pact content from the broker
+async function fetchPact(pactUrl) {
+    const response = await fetch(pactUrl, {
+        headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed to fetch pact: ${response.status}\n${text}`);
+    }
+    return response.text();
+}
+
 function extractConsumerNameFromPactUrl(pactUrl) {
     const match = pactUrl.match(/\/consumer\/([^/]+)/);
     return match ? decodeURIComponent(match[1]) : "unknown-consumer";
@@ -98,6 +110,16 @@ async function run() {
             branch: branchName
         }, githubToken);
 
+        // Fetch and store pact content
+        const pactContent = await fetchPact(pactUrl);
+        const pactFileContent = Buffer.from(pactContent).toString("base64");
+
+        await githubRequest(`/repos/${owner}/${repo}/contents/pact-failures/${safeName}-contract.json`, "PUT", {
+            message: `[Pact] Add contract for ${consumerName}`,
+            content: pactFileContent,
+            branch: branchName
+        }, githubToken);
+
         const prBody = [
             `## Contract Verification Failed`,
             ``,
@@ -110,6 +132,7 @@ async function run() {
             `| Consumer version | ${consumerVersion} |`,
             `| Pact URL | ${pactUrl} |`,
             `| Triggered by | @${githubActor} |`,
+            `| Contract file | pact-failures/${safeName}-contract.json |`,
             ``,
             `Please investigate and resolve the contract mismatch before merging.`
         ].join("\n");
