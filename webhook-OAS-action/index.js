@@ -11,6 +11,18 @@ const core = {
     }
 };
 
+function getWebhookUrl(
+    brokerUrl,
+    providerName,
+    consumerName
+) {
+    return (
+        `${brokerUrl}/webhooks/provider/` +
+        `${encodeURIComponent(providerName)}/consumer/` +
+        encodeURIComponent(consumerName)
+    );
+}
+
 async function getJson(url) {
     const response = await fetch(url, {
         method: "GET",
@@ -34,37 +46,47 @@ async function getJson(url) {
 async function webhookExists(
     brokerUrl,
     providerName,
+    consumerName,
     oasUrl,
-    oasServiceUrl
+    targetUrl
 ) {
-    const url =
-        `${brokerUrl}/webhooks/provider/` +
-        encodeURIComponent(providerName);
+    const url = getWebhookUrl(
+        brokerUrl,
+        providerName,
+        consumerName
+    );
 
-    core.info(`Checking webhooks for provider: ${providerName}`);
+    core.info(
+        `Checking webhooks for ${consumerName} -> ${providerName}`
+    );
 
     const collection = await getJson(url);
-    const webhooks = collection?._links?.["pb:webhooks"] || [];
+    const webhookLinks =
+        collection?._links?.["pb:webhooks"] || [];
 
-    for (const webhook of webhooks) {
+    for (const webhook of webhookLinks) {
         if (!webhook.href) continue;
 
         core.info(`Inspecting webhook: ${webhook.href}`);
 
         const details = await getJson(webhook.href);
 
-        const hasEvent = (details.events || [])
-            .some(event => event.name === "contract_content_changed");
+        const hasEvent = (details.events || []).some(
+            event =>
+                event.name === "contract_content_changed"
+        );
 
         const hasTarget =
-            details.request?.url ===
-            `${oasServiceUrl}/compare-from-webhook`;
+            details.request?.url === targetUrl;
 
         const hasOasUrl =
             details.request?.body?.providerUrl === oasUrl;
 
         if (hasEvent && hasTarget && hasOasUrl) {
-            core.info(`Webhook already exists for ${providerName}`);
+            core.info(
+                `Webhook already exists for ${consumerName} -> ${providerName}`
+            );
+
             return true;
         }
     }
@@ -75,12 +97,15 @@ async function webhookExists(
 async function createWebhook(
     brokerUrl,
     providerName,
+    consumerName,
     oasUrl,
-    oasServiceUrl
+    targetUrl
 ) {
-    const url =
-        `${brokerUrl}/webhooks/provider/` +
-        encodeURIComponent(providerName);
+    const url = getWebhookUrl(
+        brokerUrl,
+        providerName,
+        consumerName
+    );
 
     const payload = {
         events: [
@@ -90,7 +115,7 @@ async function createWebhook(
         ],
         request: {
             method: "POST",
-            url: `${oasServiceUrl}/compare-from-webhook`,
+            url: targetUrl,
             headers: {
                 "content-type": "application/json",
                 accept: "application/json"
@@ -120,7 +145,9 @@ async function createWebhook(
         );
     }
 
-    core.info(`Webhook created for ${providerName}`);
+    core.info(
+        `Webhook created for ${consumerName} -> ${providerName}`
+    );
 }
 
 async function run() {
@@ -129,21 +156,50 @@ async function run() {
             .getInput("brokerUrl")
             .replace(/\/+$/, "");
 
-        const providerName = core.getInput("providerName");
+        const providerName =
+            core.getInput("providerName");
 
-        const oasUrl = core
-            .getInput("oasUrl")
-            .replace(/\/+$/, "");
+        const oasUrl =
+            core.getInput("oasUrl");
 
         const oasServiceUrl = core
             .getInput("oasServiceUrl")
             .replace(/\/+$/, "");
 
+        const consumerName =
+            process.env.REPOSITORY_NAME;
+
+        if (!brokerUrl) {
+            throw new Error("brokerUrl is required");
+        }
+
+        if (!providerName) {
+            throw new Error("providerName is required");
+        }
+
+        if (!oasUrl) {
+            throw new Error("oasUrl is required");
+        }
+
+        if (!oasServiceUrl) {
+            throw new Error("oasServiceUrl is required");
+        }
+
+        if (!consumerName) {
+            throw new Error(
+                "REPOSITORY_NAME environment variable is required"
+            );
+        }
+
+        const targetUrl =
+            `${oasServiceUrl}/compare-from-webhook`;
+
         const exists = await webhookExists(
             brokerUrl,
             providerName,
+            consumerName,
             oasUrl,
-            oasServiceUrl
+            targetUrl
         );
 
         if (exists) return;
@@ -151,11 +207,14 @@ async function run() {
         await createWebhook(
             brokerUrl,
             providerName,
+            consumerName,
             oasUrl,
-            oasServiceUrl
+            targetUrl
         );
     } catch (error) {
-        core.setFailed(error?.message || "Unknown error");
+        core.setFailed(
+            error?.message || "Unknown error"
+        );
     }
 }
 
