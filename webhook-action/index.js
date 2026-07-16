@@ -81,13 +81,13 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
             }
         }
     };
-    core.info(`Webhook headers length: ${JSON.stringify(headers).length}`);
+    core.info(`Webhook headers length: ${JSON.stringify(payload.request.headers).length}`);
 
     const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            Accept: "application/hal+json, application/json, */*"
+            //Accept: "application/hal+json, application/json, */*"
         },
         body: JSON.stringify(payload)
     });
