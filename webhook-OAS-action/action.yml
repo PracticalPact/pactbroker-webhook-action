@@ -6,6 +6,10 @@ inputs:
     description: Pact Broker URL
     required: true
 
+  providerName:
+    description: Provider name used in the Pact Broker
+    required: true
+
   oasUrl:
     description: Provider OpenAPI Specification URL used as the provider name
     required: true
