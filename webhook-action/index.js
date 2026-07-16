@@ -67,7 +67,7 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
             url: `${githubUrl}/dispatches`,
             headers: {
                 "content-type": "application/json",
-                "accept": "application/vnd.github+json",
+                //"accept": "application/vnd.github+json",
                 "authorization": `Bearer ${githubToken}`
             },
             body: {
@@ -81,6 +81,7 @@ async function createWebhook(brokerUrl, githubUrl, providerName, consumerName, g
             }
         }
     };
+    core.info(`Webhook headers length: ${JSON.stringify(headers).length}`);
 
     const response = await fetch(url, {
         method: "POST",
