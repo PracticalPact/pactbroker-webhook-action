@@ -13,30 +13,43 @@ const core = {
 
 async function getJson(url) {
     const response = await fetch(url, {
+        method: "GET",
         headers: {
             Accept: "application/hal+json, application/json, */*"
         }
     });
 
     if (!response.ok) {
+        const text = await response.text();
+
         throw new Error(
-            `Request failed: ${response.status}\n${await response.text()}`
+            `Request failed: ${url}\n` +
+            `Status: ${response.status}\n\n${text}`
         );
     }
 
     return response.json();
 }
 
-async function webhookExists(brokerUrl, providerName, oasServiceUrl) {
+async function webhookExists(
+    brokerUrl,
+    providerName,
+    oasUrl,
+    oasServiceUrl
+) {
     const url =
         `${brokerUrl}/webhooks/provider/` +
         encodeURIComponent(providerName);
+
+    core.info(`Checking webhooks for provider: ${providerName}`);
 
     const collection = await getJson(url);
     const webhooks = collection?._links?.["pb:webhooks"] || [];
 
     for (const webhook of webhooks) {
         if (!webhook.href) continue;
+
+        core.info(`Inspecting webhook: ${webhook.href}`);
 
         const details = await getJson(webhook.href);
 
@@ -47,7 +60,11 @@ async function webhookExists(brokerUrl, providerName, oasServiceUrl) {
             details.request?.url ===
             `${oasServiceUrl}/compare-from-webhook`;
 
-        if (hasEvent && hasTarget) {
+        const hasOasUrl =
+            details.request?.body?.providerUrl === oasUrl;
+
+        if (hasEvent && hasTarget && hasOasUrl) {
+            core.info(`Webhook already exists for ${providerName}`);
             return true;
         }
     }
@@ -55,7 +72,12 @@ async function webhookExists(brokerUrl, providerName, oasServiceUrl) {
     return false;
 }
 
-async function createWebhook(brokerUrl, providerName, oasServiceUrl) {
+async function createWebhook(
+    brokerUrl,
+    providerName,
+    oasUrl,
+    oasServiceUrl
+) {
     const url =
         `${brokerUrl}/webhooks/provider/` +
         encodeURIComponent(providerName);
@@ -74,7 +96,7 @@ async function createWebhook(brokerUrl, providerName, oasServiceUrl) {
                 accept: "application/json"
             },
             body: {
-                providerUrl: "${pactbroker.providerName}",
+                providerUrl: oasUrl,
                 pactUrl: "${pactbroker.pactUrl}",
                 publishVerificationResult: true
             }
@@ -91,35 +113,45 @@ async function createWebhook(brokerUrl, providerName, oasServiceUrl) {
     });
 
     if (!response.ok) {
+        const text = await response.text();
+
         throw new Error(
-            `Webhook creation failed: ${response.status}\n` +
-            await response.text()
+            `Webhook creation failed: ${response.status}\n${text}`
         );
     }
 
-    core.info(`Webhook created for provider ${providerName}`);
+    core.info(`Webhook created for ${providerName}`);
 }
 
 async function run() {
     try {
-        const brokerUrl = core.getInput("brokerUrl").replace(/\/+$/, "");
-        const providerName = core.getInput("oasUrl").replace(/\/+$/, "");
-        const oasServiceUrl = core.getInput("oasServiceUrl").replace(/\/+$/, "");
+        const brokerUrl = core
+            .getInput("brokerUrl")
+            .replace(/\/+$/, "");
+
+        const providerName = core.getInput("providerName");
+
+        const oasUrl = core
+            .getInput("oasUrl")
+            .replace(/\/+$/, "");
+
+        const oasServiceUrl = core
+            .getInput("oasServiceUrl")
+            .replace(/\/+$/, "");
 
         const exists = await webhookExists(
             brokerUrl,
             providerName,
+            oasUrl,
             oasServiceUrl
         );
 
-        if (exists) {
-            core.info(`Webhook already exists for ${providerName}`);
-            return;
-        }
+        if (exists) return;
 
         await createWebhook(
             brokerUrl,
             providerName,
+            oasUrl,
             oasServiceUrl
         );
     } catch (error) {

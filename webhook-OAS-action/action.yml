@@ -12,8 +12,7 @@ inputs:
 
   oasServiceUrl:
     description: Base URL of the OAS comparison service
-    required: false
-    default: https://ds-platform-cdct-oas-service.dsservice.eu
+    required: true
 
 runs:
   using: node24
