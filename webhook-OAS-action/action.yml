@@ -1,0 +1,20 @@
+name: Ensure Provider Webhook with OAS
+description: Ensures that an OAS verification webhook exists for a provider
+
+inputs:
+  brokerUrl:
+    description: Pact Broker URL
+    required: true
+
+  oasUrl:
+    description: Provider OpenAPI Specification URL used as the provider name
+    required: true
+
+  oasServiceUrl:
+    description: Base URL of the OAS comparison service
+    required: false
+    default: https://ds-platform-cdct-oas-service.dsservice.eu
+
+runs:
+  using: node24
+  main: index.js
