@@ -1,0 +1,17 @@
+name: "publish-pacts"
+description: "Publishes Pact contracts to the Pact Broker"
+
+inputs:
+  brokerUrl:
+    description: "Pact Broker URL"
+    required: true
+  consumerVersion:
+    description: "Consumer version"
+    required: true
+  branch:
+    description: "Consumer branch"
+    required: true
+
+runs:
+  using: "node20"
+  main: "index.js"

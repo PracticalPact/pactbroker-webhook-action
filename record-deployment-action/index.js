@@ -38,7 +38,7 @@ async function run() {
         throw new Error(`Failed to record deployment: ${response.status}\n${text}`);
     }
 
-    console.log(`✅ Recorded ${appName}@${version} to ${environment}`);
+    console.log(`Recorded ${appName}@${version} to ${environment}`);
 }
 
 run().catch(e => {
