@@ -75,6 +75,7 @@ async function registerBranch(
 ) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(consumer)}` +
+        `/branches/${encodeURIComponent(branch)}` +
         `/versions/${encodeURIComponent(consumerVersion)}`;
 
     console.log(`Registering branch ${branch} for ${consumer}@${consumerVersion}`);
@@ -86,7 +87,7 @@ async function registerBranch(
             Accept: "application/hal+json, application/json, */*",
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ branch })
+        body: JSON.stringify({})
     });
 
     const text = await response.text();
