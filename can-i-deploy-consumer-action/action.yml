@@ -13,10 +13,6 @@ inputs:
   consumerVersion:
     description: "Version (commit SHA) of the consumer"
     required: true
-  gatewayName:
-    description: "Name of the gateway (e.g. Gateway). If omitted, only standard can-i-deploy is run."
-    required: false
-    default: ""
   toEnvironment:
     description: "Environment you want to deploy to"
     required: true
