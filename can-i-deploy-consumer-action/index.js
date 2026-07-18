@@ -48,6 +48,15 @@ async function canIDeploy(brokerUrl, token, appName, version, toEnvironment, ret
     }
 }
 
+// Auto-discover gateway names from consumerName---X participants
+async function getGatewayNames(brokerUrl, token, consumerName) {
+    const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
+    return (data._embedded?.pacticipants || [])
+        .map(p => p.name)
+        .filter(name => name.startsWith(`${consumerName}---`))
+        .map(name => name.split("---").slice(1).join("---"));
+}
+
 async function getGatewayProviderNames(brokerUrl, token, gatewayName) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
     return (data._embedded?.pacticipants || [])
@@ -80,7 +89,6 @@ async function fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvi
     );
 }
 
-// Creates the new row in Matrix 2
 async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent) {
     await brokerRequest(`${brokerUrl}/publish`, token, "POST", {
         pacticipantName: consumerGwName,
@@ -113,17 +121,9 @@ async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion
             const pactContent = await fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider);
             await publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent);
 
-            return canIDeploy(
-                brokerUrl,
-                token,
-                consumerGwName,
-                compositeVersion,
-                toEnvironment,
-                retryWhileUnknown,
-                retryInterval
-            );
+            return canIDeploy(brokerUrl, token, consumerGwName, compositeVersion, toEnvironment, retryWhileUnknown, retryInterval);
         } catch (e) {
-            console.log(`⚠️ Skipping ${gatewayProviderName}: ${e.message}`);
+            console.log(`Skipping ${gatewayProviderName}: ${e.message}`);
             return true;
         }
     }));
@@ -134,16 +134,19 @@ async function run() {
     const token = getInput("brokerToken");
     const consumerName = getInput("consumerName");
     const consumerVersion = getInput("consumerVersion");
-    const gatewayName = getInput("gatewayName");
     const toEnvironment = getInput("toEnvironment");
     const retryWhileUnknown = parseInt(getInput("retryWhileUnknown") || "0");
     const retryInterval = parseInt(getInput("retryInterval") || "10");
 
+    // Auto-discover gateways
+    const gatewayNames = await getGatewayNames(brokerUrl, token, consumerName);
+    console.log(`Found gateways: ${gatewayNames.join(", ") || "none"}`);
+
     const results = await Promise.all([
         canIDeploy(brokerUrl, token, consumerName, consumerVersion, toEnvironment, retryWhileUnknown, retryInterval),
-        ...(gatewayName
-            ? [checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval)]
-            : [])
+        ...gatewayNames.map(gatewayName =>
+            checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval)
+        )
     ]);
 
     if (results.flat().some(r => !r)) process.exit(1);
