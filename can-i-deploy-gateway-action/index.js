@@ -37,18 +37,18 @@ async function canIDeployLatest(brokerUrl, token, appName, toEnvironment, retryW
         const data = await brokerRequest(url, token);
 
         if (data.summary?.deployable) {
-            console.log(`✅ ${appName} (latest) can be deployed to ${toEnvironment}`);
+            console.log(`${appName} (latest) can be deployed to ${toEnvironment}`);
             return true;
         }
 
         if (data.summary?.unknown > 0 && attempts < retryWhileUnknown) {
             attempts++;
-            console.log(`⏳ ${appName} unknown, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
+            console.log(`${appName} unknown, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
             await new Promise(r => setTimeout(r, retryInterval * 1000));
             continue;
         }
 
-        console.error(`❌ ${appName} (latest) cannot be deployed to ${toEnvironment}`);
+        console.error(`${appName} (latest) cannot be deployed to ${toEnvironment}`);
         console.error(data.summary?.reason || "Unknown reason");
         return false;
     }
@@ -75,20 +75,12 @@ async function run() {
         return;
     }
 
-    // Downstreams must pass — they block deployment
-    const downstreamResults = await Promise.all(
-        downstreams.map(name => canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval))
-    );
+    const [downstreamResults, consumerResults] = await Promise.all([
+        Promise.all(downstreams.map(name => canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval))),
+        Promise.all(consumers.map(name => canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval)))
+    ]);
 
-    // Consumers are informational only — don't block deployment
-    await Promise.all(
-        consumers.map(async name => {
-            const ok = await canIDeployLatest(brokerUrl, token, name, toEnvironment, retryWhileUnknown, retryInterval);
-            if (!ok) console.log(`⚠️ Consumer ${name} cannot deploy but not blocking gateway deployment`);
-        })
-    );
-
-    if (downstreamResults.some(r => !r)) process.exit(1);
+    if ([...downstreamResults, ...consumerResults].some(r => !r)) process.exit(1);
 }
 
 run().catch(e => {

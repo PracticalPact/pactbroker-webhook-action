@@ -31,18 +31,18 @@ async function canIDeploy(brokerUrl, token, appName, version, toEnvironment, ret
         const data = await brokerRequest(url, token);
 
         if (data.summary?.deployable) {
-            console.log(`✅ ${appName}@${version} can be deployed to ${toEnvironment}`);
+            console.log(`${appName}@${version} can be deployed to ${toEnvironment}`);
             return true;
         }
 
         if (data.summary?.unknown > 0 && attempts < retryWhileUnknown) {
             attempts++;
-            console.log(`⏳ Unknown, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
+            console.log(`Unknown, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
             await new Promise(r => setTimeout(r, retryInterval * 1000));
             continue;
         }
 
-        console.error(`❌ ${appName}@${version} cannot be deployed to ${toEnvironment}`);
+        console.error(`${appName}@${version} cannot be deployed to ${toEnvironment}`);
         console.error(data.summary?.reason || "Unknown reason");
         return false;
     }

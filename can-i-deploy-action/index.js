@@ -29,18 +29,18 @@ async function run() {
         const data = await check(brokerUrl, token, appName, version, toEnvironment);
 
         if (data.summary?.deployable) {
-            console.log(`✅ ${appName} ${version} can be deployed to ${toEnvironment}`);
+            console.log(`${appName} ${version} can be deployed to ${toEnvironment}`);
             break;
         }
 
         if (data.summary?.unknown > 0 && attempts < retryWhileUnknown) {
             attempts++;
-            console.log(`⏳ Unknown results, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
+            console.log(`Unknown results, retrying in ${retryInterval}s (${attempts}/${retryWhileUnknown})`);
             await new Promise(r => setTimeout(r, retryInterval * 1000));
             continue;
         }
 
-        console.error(`❌ ${appName} ${version} cannot be deployed to ${toEnvironment}`);
+        console.error(`${appName} ${version} cannot be deployed to ${toEnvironment}`);
         console.error(data.summary?.reason || "Unknown reason");
         process.exit(1);
     }
