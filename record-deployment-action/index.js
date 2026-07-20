@@ -1,16 +1,61 @@
 function getInput(name) {
-    return process.env[`INPUT_${name.toUpperCase()}`];
+    return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
 async function getEnvironmentUuid(brokerUrl, environment) {
     const response = await fetch(`${brokerUrl}/environments`, {
-        headers: { "Accept": "application/hal+json, application/json, */*" }
+        headers: {
+            Accept: "application/hal+json, application/json, */*"
+        }
     });
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to get environments: ${response.status}\n` +
+            `${await response.text()}`
+        );
+    }
+
     const data = await response.json();
     const env = (data._embedded?.environments || [])
         .find(e => e.name === environment);
-    if (!env) throw new Error(`Environment ${environment} not found`);
+
+    if (!env) {
+        throw new Error(`Environment ${environment} not found`);
+    }
+
     return env.uuid;
+}
+
+async function recordDeployment(
+    brokerUrl,
+    appName,
+    version,
+    environmentUuid,
+    environment
+) {
+    const url =
+        `${brokerUrl}/pacticipants/${encodeURIComponent(appName)}` +
+        `/versions/${encodeURIComponent(version)}` +
+        `/deployed-versions/environment/${environmentUuid}`;
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to record deployment: ${response.status}\n${text}`
+        );
+    }
+
+    console.log(`Recorded ${appName}@${version} to ${environment}`);
 }
 
 async function run() {
@@ -19,29 +64,35 @@ async function run() {
     const version = getInput("version");
     const environment = getInput("environment");
 
-    const uuid = await getEnvironmentUuid(brokerUrl, environment);
-    console.log(`Environment UUID: ${uuid}`);
+    if (!brokerUrl) throw new Error("brokerUrl is required");
+    if (!appName) throw new Error("applicationName is required");
+    if (!version) throw new Error("version is required");
+    if (!environment) throw new Error("environment is required");
 
-    const url = `${brokerUrl}/pacticipants/${encodeURIComponent(appName)}/versions/${encodeURIComponent(version)}/deployed-versions/environment/${uuid}`;
-    console.log(`POST to: ${url}`);
+    const uuid = await getEnvironmentUuid(
+        brokerUrl,
+        environment
+    );
 
-    const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
-    });
-
-    const text = await response.text();
-    console.log(`Status: ${response.status} - ${text}`);
-
-    if (!response.ok) {
-        throw new Error(`Failed to record deployment: ${response.status}\n${text}`);
-    }
-
-    console.log(`Recorded ${appName}@${version} to ${environment}`);
+    await recordDeployment(
+        brokerUrl,
+        appName,
+        version,
+        uuid,
+        environment
+    );
 }
 
-run().catch(e => {
-    console.error(e.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(error => {
+        console.error(error.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput,
+    getEnvironmentUuid,
+    recordDeployment,
+    run
+};

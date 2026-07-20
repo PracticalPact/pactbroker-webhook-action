@@ -56,14 +56,7 @@ async function getVersions(brokerUrl, token, participant) {
     return (data._embedded?.versions || []).map(v => v.number).filter(Boolean);
 }
 
-async function recordDeployment(
-    brokerUrl,
-    token,
-    participant,
-    version,
-    environmentUuid,
-    environment
-) {
+async function recordDeployment(brokerUrl, token, participant, version, environmentUuid, environment) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
         `/versions/${encodeURIComponent(version)}` +
@@ -122,7 +115,7 @@ async function run() {
             throw new Error(`No Gateway-Provider participants found for '${gatewayName}'`);
         }
 
-        const deploymentResults = await Promise.all(
+        const results = await Promise.all(
             gatewayProviders.map(async name => ({
                 name,
                 versions: await getDeployedVersions(
@@ -134,7 +127,7 @@ async function run() {
             }))
         );
 
-        const missing = deploymentResults.filter(r => r.versions.length === 0);
+        const missing = results.filter(r => r.versions.length === 0);
 
         if (missing.length > 0) {
             throw new Error(
@@ -143,9 +136,7 @@ async function run() {
             );
         }
 
-        const gatewayVersions = [
-            ...new Set(deploymentResults.flatMap(r => r.versions))
-        ];
+        const gatewayVersions = [...new Set(results.flatMap(r => r.versions))];
 
         if (gatewayVersions.length !== 1) {
             throw new Error(
@@ -154,14 +145,9 @@ async function run() {
             );
         }
 
-        const compositeVersions = await getVersions(
-            brokerUrl,
-            token,
-            participant
-        );
-
+        const versions = await getVersions(brokerUrl, token, participant);
         const compositeVersion = findCompositeVersion(
-            compositeVersions,
+            versions,
             consumerVersion,
             gatewayVersions[0]
         );
@@ -184,7 +170,21 @@ async function run() {
     }
 }
 
-run().catch(error => {
-    console.error(error.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(error => {
+        console.error(error.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput,
+    brokerRequest,
+    getEnvironmentUuid,
+    getParticipantNames,
+    getDeployedVersions,
+    getVersions,
+    recordDeployment,
+    findCompositeVersion,
+    run
+};

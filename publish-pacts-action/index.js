@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 function getInput(name) {
-    return process.env[`INPUT_${name.toUpperCase()}`];
+    return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
 function getPactFiles() {
@@ -25,7 +25,6 @@ function getPactFiles() {
 
 async function publishPact(brokerUrl, pactFile, consumerVersion) {
     const pact = JSON.parse(fs.readFileSync(pactFile, "utf8"));
-
     const consumer = pact.consumer?.name;
     const provider = pact.provider?.name;
 
@@ -40,9 +39,6 @@ async function publishPact(brokerUrl, pactFile, consumerVersion) {
         `/consumer/${encodeURIComponent(consumer)}` +
         `/version/${encodeURIComponent(consumerVersion)}`;
 
-    console.log(`Publishing ${consumer} -> ${provider}`);
-    console.log(`PUT ${url}`);
-
     const response = await fetch(url, {
         method: "PUT",
         headers: {
@@ -54,9 +50,6 @@ async function publishPact(brokerUrl, pactFile, consumerVersion) {
 
     const text = await response.text();
 
-    console.log(`Status: ${response.status}`);
-    if (text) console.log(text);
-
     if (!response.ok) {
         throw new Error(
             `Failed to publish ${path.basename(pactFile)}: ` +
@@ -64,22 +57,15 @@ async function publishPact(brokerUrl, pactFile, consumerVersion) {
         );
     }
 
+    console.log(`Published ${consumer} -> ${provider}`);
     return consumer;
 }
 
-async function registerBranch(
-    brokerUrl,
-    consumer,
-    consumerVersion,
-    branch
-) {
+async function registerBranch(brokerUrl, consumer, consumerVersion, branch) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(consumer)}` +
         `/branches/${encodeURIComponent(branch)}` +
         `/versions/${encodeURIComponent(consumerVersion)}`;
-
-    console.log(`Registering branch ${branch} for ${consumer}@${consumerVersion}`);
-    console.log(`PUT ${url}`);
 
     const response = await fetch(url, {
         method: "PUT",
@@ -92,45 +78,32 @@ async function registerBranch(
 
     const text = await response.text();
 
-    console.log(`Status: ${response.status}`);
-    if (text) console.log(text);
-
     if (!response.ok) {
         throw new Error(
             `Failed to register branch for ${consumer}: ` +
             `${response.status}\n${text}`
         );
     }
+
+    console.log(`Registered ${branch} for ${consumer}@${consumerVersion}`);
 }
 
 async function run() {
-    const brokerUrl = getInput("brokerUrl")?.replace(/\/+$/, "");
+    const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
     const consumerVersion = getInput("consumerVersion");
     const branch = getInput("branch");
 
-    if (!brokerUrl) {
-        throw new Error("brokerUrl is required");
-    }
-
-    if (!consumerVersion) {
-        throw new Error("consumerVersion is required");
-    }
-
-    if (!branch) {
-        throw new Error("branch is required");
-    }
+    if (!brokerUrl) throw new Error("brokerUrl is required");
+    if (!consumerVersion) throw new Error("consumerVersion is required");
+    if (!branch) throw new Error("branch is required");
 
     const pactFiles = getPactFiles();
     const consumers = new Set();
 
     for (const pactFile of pactFiles) {
-        const consumer = await publishPact(
-            brokerUrl,
-            pactFile,
-            consumerVersion
+        consumers.add(
+            await publishPact(brokerUrl, pactFile, consumerVersion)
         );
-
-        consumers.add(consumer);
     }
 
     for (const consumer of consumers) {
@@ -145,7 +118,17 @@ async function run() {
     console.log(`Published ${pactFiles.length} Pact contract(s)`);
 }
 
-run().catch(error => {
-    console.error(error.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(error => {
+        console.error(error.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput,
+    getPactFiles,
+    publishPact,
+    registerBranch,
+    run
+};

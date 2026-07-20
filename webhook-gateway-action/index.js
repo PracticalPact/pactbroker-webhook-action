@@ -143,4 +143,15 @@ async function run() {
     }
 }
 
-run();
+if (require.main === module) {
+    run();
+}
+
+module.exports = {
+    getInput,
+    getJson,
+    hasWebhookAlready,
+    createWebhook,
+    processProvider,
+    run
+};

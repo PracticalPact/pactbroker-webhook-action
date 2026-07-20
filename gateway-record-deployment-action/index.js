@@ -12,59 +12,32 @@ async function brokerRequest(url, token, method = "GET", body = null) {
         }
     };
 
-    if (body !== null) {
-        options.body = JSON.stringify(body);
-    }
+    if (body !== null) options.body = JSON.stringify(body);
 
     const response = await fetch(url, options);
 
     if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Broker error ${response.status}: ${text}`);
+        throw new Error(`Broker error ${response.status}: ${await response.text()}`);
     }
 
     const text = await response.text();
     return text ? JSON.parse(text) : {};
 }
 
-async function getEnvironmentUuid(
-    brokerUrl,
-    token,
-    environment
-) {
-    const data = await brokerRequest(
-        `${brokerUrl}/environments`,
-        token
-    );
+async function getEnvironmentUuid(brokerUrl, token, environment) {
+    const data = await brokerRequest(`${brokerUrl}/environments`, token);
+    const env = (data._embedded?.environments || []).find(e => e.name === environment);
 
-    const foundEnvironment =
-        (data._embedded?.environments || [])
-            .find(item => item.name === environment);
-
-    if (!foundEnvironment) {
-        throw new Error(
-            `Environment '${environment}' was not found`
-        );
-    }
-
-    return foundEnvironment.uuid;
+    if (!env) throw new Error(`Environment '${environment}' was not found`);
+    return env.uuid;
 }
 
-async function getGatewayDownstreams(
-    brokerUrl,
-    token,
-    gatewayName
-) {
-    const data = await brokerRequest(
-        `${brokerUrl}/pacticipants`,
-        token
-    );
+async function getGatewayDownstreams(brokerUrl, token, gatewayName) {
+    const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
 
     return (data._embedded?.pacticipants || [])
-        .map(participant => participant.name)
-        .filter(name =>
-            name.startsWith(`${gatewayName}---`)
-        );
+        .map(p => p.name)
+        .filter(name => name.startsWith(`${gatewayName}---`));
 }
 
 async function recordDeployment(
@@ -76,23 +49,16 @@ async function recordDeployment(
     environment
 ) {
     const url =
-        `${brokerUrl}/pacticipants/` +
-        `${encodeURIComponent(participantName)}/versions/` +
-        `${encodeURIComponent(version)}/deployed-versions/` +
-        `environment/${environmentUuid}`;
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}` +
+        `/versions/${encodeURIComponent(version)}` +
+        `/deployed-versions/environment/${environmentUuid}`;
 
     await brokerRequest(url, token, "POST", {});
-
-    console.log(
-        `Recorded ${participantName}@${version} ` +
-        `in ${environment}`
-    );
+    console.log(`Recorded ${participantName}@${version} in ${environment}`);
 }
 
 async function run() {
-    const brokerUrl =
-        getInput("brokerUrl").replace(/\/+$/, "");
-
+    const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
     const token = getInput("brokerToken");
     const gatewayName = getInput("applicationName");
     const gatewayVersion = getInput("version");
@@ -100,40 +66,23 @@ async function run() {
 
     if (!brokerUrl) throw new Error("brokerUrl is required");
     if (!token) throw new Error("brokerToken is required");
-    if (!gatewayName) {
-        throw new Error("applicationName is required");
-    }
-    if (!gatewayVersion) {
-        throw new Error("version is required");
-    }
-    if (!environment) {
-        throw new Error("environment is required");
-    }
+    if (!gatewayName) throw new Error("applicationName is required");
+    if (!gatewayVersion) throw new Error("version is required");
+    if (!environment) throw new Error("environment is required");
 
-    const [downstreams, environmentUuid] =
-        await Promise.all([
-            getGatewayDownstreams(
-                brokerUrl,
-                token,
-                gatewayName
-            ),
-            getEnvironmentUuid(
-                brokerUrl,
-                token,
-                environment
-            )
-        ]);
+    const [downstreams, environmentUuid] = await Promise.all([
+        getGatewayDownstreams(brokerUrl, token, gatewayName),
+        getEnvironmentUuid(brokerUrl, token, environment)
+    ]);
 
-    console.log(
-        `Found ${downstreams.length} downstream participant(s)`
-    );
+    console.log(`Found ${downstreams.length} downstream participant(s)`);
 
     await Promise.all(
-        downstreams.map(participantName =>
+        downstreams.map(name =>
             recordDeployment(
                 brokerUrl,
                 token,
-                participantName,
+                name,
                 gatewayVersion,
                 environmentUuid,
                 environment
@@ -142,7 +91,18 @@ async function run() {
     );
 }
 
-run().catch(error => {
-    console.error(error.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(error => {
+        console.error(error.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput,
+    brokerRequest,
+    getEnvironmentUuid,
+    getGatewayDownstreams,
+    recordDeployment,
+    run
+};

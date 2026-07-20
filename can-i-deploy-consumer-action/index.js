@@ -123,8 +123,12 @@ async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion
 
             return canIDeploy(brokerUrl, token, consumerGwName, compositeVersion, toEnvironment, retryWhileUnknown, retryInterval);
         } catch (e) {
-            console.log(`Skipping ${gatewayProviderName}: ${e.message}`);
-            return true;
+            if (e.message.startsWith("No verified row found")) {
+                console.log(`Skipping ${gatewayProviderName}: ${e.message}`);
+                return true;
+            }
+            console.error(`Failed checking ${gatewayProviderName}: ${e.message}`);
+            return false;
         }
     }));
 }
@@ -152,7 +156,15 @@ async function run() {
     if (results.flat().some(r => !r)) process.exit(1);
 }
 
-run().catch(e => {
-    console.error(e.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(e => {
+        console.error(e.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput, brokerRequest, canIDeploy, getGatewayNames,
+    getGatewayProviderNames, getVerifiedGwSha, fetchLatestPact,
+    publishPact, checkGatewayPairs, run
+};

@@ -83,7 +83,14 @@ async function run() {
     if ([...downstreamResults, ...consumerResults].some(r => !r)) process.exit(1);
 }
 
-run().catch(e => {
-    console.error(e.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    run().catch(e => {
+        console.error(e.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput, brokerRequest, getGatewayDownstreamNames,
+    getGatewayConsumerNames, canIDeployLatest, run
+};

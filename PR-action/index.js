@@ -2,22 +2,13 @@ function getInput(name) {
     return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
-const log = {
-    info: console.log,
-    setFailed: (message) => {
-        console.error(message);
-        process.exit(1);
-    }
-};
-
 async function fetchPact(pactUrl) {
     const response = await fetch(pactUrl, {
         headers: { Accept: "application/json" }
     });
 
     if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Failed to fetch pact: ${response.status}\n${text}`);
+        throw new Error(`Failed to fetch pact: ${response.status}\n${await response.text()}`);
     }
 
     return response.text();
@@ -40,8 +31,7 @@ async function githubRequest(path, method, body, token) {
     });
 
     if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`GitHub API error ${response.status}: ${text}`);
+        throw new Error(`GitHub API error ${response.status}: ${await response.text()}`);
     }
 
     return response.json();
@@ -56,9 +46,9 @@ async function ensureBranch(owner, repo, branch, fallbackBranch, token) {
             token
         );
 
-        log.info(`Branch ${branch} already exists`);
+        console.log(`Branch ${branch} already exists`);
     } catch {
-        const fallbackRef = await githubRequest(
+        const fallback = await githubRequest(
             `/repos/${owner}/${repo}/git/refs/heads/${fallbackBranch}`,
             "GET",
             null,
@@ -70,12 +60,12 @@ async function ensureBranch(owner, repo, branch, fallbackBranch, token) {
             "POST",
             {
                 ref: `refs/heads/${branch}`,
-                sha: fallbackRef.object.sha
+                sha: fallback.object.sha
             },
             token
         );
 
-        log.info(`Created branch ${branch} from ${fallbackBranch}`);
+        console.log(`Created branch ${branch} from ${fallbackBranch}`);
     }
 }
 
@@ -101,7 +91,7 @@ async function createBranch(owner, repo, branch, sha, token) {
         token
     );
 
-    log.info(`Created branch ${branch}`);
+    console.log(`Created branch ${branch}`);
 }
 
 async function getFileSha(owner, repo, path, branch, token) {
@@ -120,7 +110,7 @@ async function getFileSha(owner, repo, path, branch, token) {
 }
 
 async function createOrUpdateFile(owner, repo, path, branch, content, message, token) {
-    const existingSha = await getFileSha(owner, repo, path, branch, token);
+    const sha = await getFileSha(owner, repo, path, branch, token);
 
     const body = {
         message,
@@ -128,9 +118,7 @@ async function createOrUpdateFile(owner, repo, path, branch, content, message, t
         branch
     };
 
-    if (existingSha) {
-        body.sha = existingSha;
-    }
+    if (sha) body.sha = sha;
 
     await githubRequest(
         `/repos/${owner}/${repo}/contents/${path}`,
@@ -139,93 +127,130 @@ async function createOrUpdateFile(owner, repo, path, branch, content, message, t
         token
     );
 
-    log.info(existingSha ? `Updated ${path}` : `Created ${path}`);
+    console.log(sha ? `Updated ${path}` : `Created ${path}`);
 }
 
 async function run() {
-    try {
-        const githubToken = getInput("githubToken");
-        const pactUrl = getInput("pactUrl");
+    const githubToken = getInput("githubToken");
+    const pactUrl = getInput("pactUrl");
 
-        if (!githubToken) throw new Error("Missing required input: githubToken");
-        if (!pactUrl) throw new Error("Missing required input: pactUrl");
-
-        const consumerName =
-            getInput("consumerName") ||
-            extractConsumerNameFromPactUrl(pactUrl);
-
-        const consumerBranch = getInput("consumerVersionBranch") || "unknown-branch";
-        const consumerVersion = getInput("consumerVersionNumber") || "unknown-version";
-        const providerName = getInput("providerName") || "unknown-provider";
-        const baseBranch = getInput("baseBranch") || "main";
-        const githubActor = getInput("githubActor") || "unknown-actor";
-
-        const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-
-        const safeName = consumerName
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "-")
-            .replace(/^-+|-+$/g, "");
-
-        const date = new Date()
-            .toISOString()
-            .replace(/[T:]/g, "-")
-            .replace(/\..+/, "");
-
-        const branchName = `pact-failed/${safeName}-${date}`;
-        const filePath = `pact-failures/${safeName}-contract.json`;
-
-        await ensureBranch(owner, repo, baseBranch, "main", githubToken);
-
-        const baseSha = await getBranchSha(owner, repo, baseBranch, githubToken);
-
-        await createBranch(owner, repo, branchName, baseSha, githubToken);
-
-        const pactContent = await fetchPact(pactUrl);
-
-        await createOrUpdateFile(
-            owner,
-            repo,
-            filePath,
-            branchName,
-            pactContent,
-            `[Pact] Add contract for ${consumerName}`,
-            githubToken
-        );
-
-        const prBody = [
-            "## Contract Verification Failed",
-            "",
-            `The contract published by **${consumerName}** could not be verified by **${providerName}**.`,
-            "",
-            "| | |",
-            "|---|---|",
-            `| Consumer | ${consumerName} |`,
-            `| Consumer branch | ${consumerBranch} |`,
-            `| Consumer version | ${consumerVersion} |`,
-            `| Pact URL | ${pactUrl} |`,
-            `| Triggered by | @${githubActor} |`,
-            `| Contract file | ${filePath} |`,
-            "",
-            "Please investigate and resolve the contract mismatch before merging."
-        ].join("\n");
-
-        const pr = await githubRequest(
-            `/repos/${owner}/${repo}/pulls`,
-            "POST",
-            {
-                title: `[Pact] Contract verification failed: ${consumerName}`,
-                body: prBody,
-                head: branchName,
-                base: baseBranch
-            },
-            githubToken
-        );
-
-        log.info(`PR created: ${pr.html_url}`);
-    } catch (error) {
-        log.setFailed(error?.message || "Unknown error");
+    if (!githubToken) throw new Error("Missing required input: githubToken");
+    if (!pactUrl) throw new Error("Missing required input: pactUrl");
+    if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error("GITHUB_REPOSITORY is required");
     }
+
+    const consumerName =
+        getInput("consumerName") ||
+        extractConsumerNameFromPactUrl(pactUrl);
+
+    const consumerBranch =
+        getInput("consumerVersionBranch") || "unknown-branch";
+
+    const consumerVersion =
+        getInput("consumerVersionNumber") || "unknown-version";
+
+    const providerName =
+        getInput("providerName") || "unknown-provider";
+
+    const baseBranch =
+        getInput("baseBranch") || "main";
+
+    const githubActor =
+        getInput("githubActor") || "unknown-actor";
+
+    const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+
+    const safeName = consumerName
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    const date = new Date()
+        .toISOString()
+        .replace(/[T:]/g, "-")
+        .replace(/\..+/, "");
+
+    const branchName = `pact-failed/${safeName}-${date}`;
+    const filePath = `pact-failures/${safeName}-contract.json`;
+
+    await ensureBranch(owner, repo, baseBranch, "main", githubToken);
+
+    const baseSha = await getBranchSha(
+        owner,
+        repo,
+        baseBranch,
+        githubToken
+    );
+
+    await createBranch(
+        owner,
+        repo,
+        branchName,
+        baseSha,
+        githubToken
+    );
+
+    const pactContent = await fetchPact(pactUrl);
+
+    await createOrUpdateFile(
+        owner,
+        repo,
+        filePath,
+        branchName,
+        pactContent,
+        `[Pact] Add contract for ${consumerName}`,
+        githubToken
+    );
+
+    const prBody = [
+        "## Contract Verification Failed",
+        "",
+        `The contract published by **${consumerName}** could not be verified by **${providerName}**.`,
+        "",
+        "| | |",
+        "|---|---|",
+        `| Consumer | ${consumerName} |`,
+        `| Consumer branch | ${consumerBranch} |`,
+        `| Consumer version | ${consumerVersion} |`,
+        `| Pact URL | ${pactUrl} |`,
+        `| Triggered by | @${githubActor} |`,
+        `| Contract file | ${filePath} |`,
+        "",
+        "Please investigate and resolve the contract mismatch before merging."
+    ].join("\n");
+
+    const pr = await githubRequest(
+        `/repos/${owner}/${repo}/pulls`,
+        "POST",
+        {
+            title: `[Pact] Contract verification failed: ${consumerName}`,
+            body: prBody,
+            head: branchName,
+            base: baseBranch
+        },
+        githubToken
+    );
+
+    console.log(`PR created: ${pr.html_url}`);
 }
 
-run();
+if (require.main === module) {
+    run().catch(error => {
+        console.error(error.message);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    getInput,
+    fetchPact,
+    extractConsumerNameFromPactUrl,
+    githubRequest,
+    ensureBranch,
+    getBranchSha,
+    createBranch,
+    getFileSha,
+    createOrUpdateFile,
+    run
+};
