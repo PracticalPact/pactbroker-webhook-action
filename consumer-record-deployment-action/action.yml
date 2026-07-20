@@ -1,5 +1,5 @@
-name: "gateway-record-deployment"
-description: "Records deployment for all gateway-to-provider participants"
+name: "consumer-record-deployment"
+description: "Records deployment for a Consumer and its Consumer-to-gateway participants"
 
 inputs:
   brokerUrl:
@@ -11,11 +11,11 @@ inputs:
     required: true
 
   applicationName:
-    description: "Name of the gateway application"
+    description: "Name of the Consumer application"
     required: true
 
   version:
-    description: "Version or commit SHA of the gateway application"
+    description: "Version or commit SHA of the Consumer application"
     required: true
 
   environment:
