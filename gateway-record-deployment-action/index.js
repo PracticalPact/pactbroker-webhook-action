@@ -36,23 +36,19 @@ async function getParticipantNames(brokerUrl) {
     return (data._embedded?.pacticipants || []).map(p => p.name).filter(Boolean);
 }
 
-async function getDeployedVersions(brokerUrl, participant, environmentUuid) {
-    const url =
-        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
-        `/currently-deployed-versions/environment/${environmentUuid}`;
-
+async function getDeployedVersions(brokerUrl, participant, environmentUuid, environment) {
     try {
-        const data = await brokerRequest(url);
-        return [
-            ...(data._embedded?.versions || []).map(v => v.number),
-            ...(data._links?.["pb:versions"] || []).map(v => v.name || v.title || v.number)
-        ].filter(Boolean);
+        const data = await brokerRequest(
+            `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/latest-version`
+        );
+        const deployedEnvs = data._links?.["pb:deployed-environments"] || [];
+        const isDeployed = deployedEnvs.some(e =>
+            e.currently_deployed && e.name?.toLowerCase() === environment.toLowerCase()
+        );
+        return isDeployed ? [data.number] : [];
     } catch (e) {
-        if (e.message.includes("404")) {
-            console.log(`${participant} has no deployment record in this environment — skipping`);
-            return [];
-        }
-        throw e;
+        console.log(`Could not fetch latest version for ${participant}: ${e.message}`);
+        return [];
     }
 }
 
@@ -101,7 +97,7 @@ function getGatewayConsumers(gatewayName, participants) {
 // If Consumer isn't deployed here at all, this is not an error -- it's simply
 // not relevant to this environment and is skipped.
 async function recordConsumerGatewayPair(brokerUrl, participant, consumerName, gatewayVersion, environmentUuid, environment) {
-    const consumerVersions = await getDeployedVersions(brokerUrl, consumerName, environmentUuid);
+    const consumerVersions = await getDeployedVersions(brokerUrl, consumerName, environmentUuid, environment);
 
     if (consumerVersions.length === 0) {
         console.log(`Skipping ${participant}: '${consumerName}' is not deployed to ${environment}`);
