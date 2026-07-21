@@ -82,29 +82,6 @@ async function getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion,
     return row.provider.version.number;
 }
 
-async function fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider) {
-    return brokerRequest(
-        `${brokerUrl}/pacts/provider/${encodeURIComponent(downstreamProvider)}/consumer/${encodeURIComponent(consumerGwName)}/latest`,
-        token
-    );
-}
-
-async function publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent) {
-    await brokerRequest(`${brokerUrl}/publish`, token, "POST", {
-        pacticipantName: consumerGwName,
-        pacticipantVersionNumber: compositeVersion,
-        branch: "local",
-        contracts: [{
-            consumerName: pactContent.consumer.name,
-            providerName: pactContent.provider.name,
-            specification: "pact",
-            contentType: "application/json",
-            content: Buffer.from(JSON.stringify(pactContent)).toString("base64")
-        }]
-    });
-    console.log(`Published ${consumerGwName}@${compositeVersion}`);
-}
-
 async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion, gatewayName, toEnvironment, retryWhileUnknown, retryInterval) {
     const consumerGwName = `${consumerName}---${gatewayName}`;
     const gatewayProviders = await getGatewayProviderNames(brokerUrl, token, gatewayName);
@@ -117,9 +94,6 @@ async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion
             const gwSha = await getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName);
             const compositeVersion = `${consumerVersion}---${gwSha}`;
             console.log(`Composite version for ${downstreamProvider}: ${compositeVersion}`);
-
-            const pactContent = await fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider);
-            await publishPact(brokerUrl, token, consumerGwName, compositeVersion, pactContent);
 
             return canIDeploy(brokerUrl, token, consumerGwName, compositeVersion, toEnvironment, retryWhileUnknown, retryInterval);
         } catch (e) {
