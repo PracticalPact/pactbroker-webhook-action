@@ -6,10 +6,6 @@ inputs:
     description: "Pact Broker URL"
     required: true
 
-  brokerToken:
-    description: "Pact Broker token"
-    required: true
-
   applicationName:
     description: "Name of the gateway application"
     required: true
