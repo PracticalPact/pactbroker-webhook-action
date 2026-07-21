@@ -139,6 +139,6 @@ if (require.main === module) {
 
 module.exports = {
     getInput, brokerRequest, canIDeploy, getGatewayNames,
-    getGatewayProviderNames, getVerifiedGwSha, fetchLatestPact,
-    publishPact, checkGatewayPairs, run
+    getGatewayProviderNames, getVerifiedGwSha,
+    checkGatewayPairs, run
 };
