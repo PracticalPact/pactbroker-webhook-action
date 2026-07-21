@@ -117,7 +117,6 @@ async function run() {
                 name,
                 versions: await getDeployedVersions(
                     brokerUrl,
-                    token,
                     name,
                     environmentUuid
                 )
@@ -142,7 +141,7 @@ async function run() {
             );
         }
 
-        const versions = await getVersions(brokerUrl, token, participant);
+        const versions = await getVersions(brokerUrl, participant);
         const compositeVersion = findCompositeVersion(
             versions,
             consumerVersion,
@@ -158,7 +157,6 @@ async function run() {
 
         await recordDeployment(
             brokerUrl,
-            token,
             participant,
             compositeVersion,
             environmentUuid,

@@ -115,7 +115,7 @@ async function checkGatewayPairs(brokerUrl, token, consumerName, consumerVersion
             const downstreamProvider = gatewayProviderName.split("---").slice(1).join("---");
 
             const gwSha = await getVerifiedGwSha(brokerUrl, token, consumerName, consumerVersion, gatewayProviderName);
-            const compositeVersion = `${consumerVersion}-${gwSha}`;
+            const compositeVersion = `${consumerVersion}---${gwSha}`;
             console.log(`Composite version for ${downstreamProvider}: ${compositeVersion}`);
 
             const pactContent = await fetchLatestPact(brokerUrl, token, consumerGwName, downstreamProvider);
