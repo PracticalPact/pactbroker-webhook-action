@@ -130,3 +130,88 @@ test("checkGatewayPairs: no verified row for a pair is still a legitimate skip (
     );
     assert.deepStrictEqual(results, [true]);
 });
+
+// Simulates a broker where: Frontend is standalone-deployable, GW---API is
+// verified against Frontend@sha1 with gateway version gwsha1, the
+// Frontend---GW/API pact exists, publish succeeds, and the resulting
+// composite version (sha1-gwsha1) is deployable.
+function mockHappyPathBroker() {
+    const posts = [];
+
+    global.fetch = async (url, options = {}) => {
+        if (url.includes("/pacticipants")) {
+            return {
+                ok: true,
+                json: async () => ({
+                    _embedded: {
+                        pacticipants: [
+                            { name: "Frontend---GW" },
+                            { name: "GW---API" },
+                        ]
+                    }
+                })
+            };
+        }
+
+        if (url.includes("/matrix") && url.includes("q[][latest]=true")) {
+            // getVerifiedGwSha: matrix lookup for Frontend@sha1 vs GW---API
+            return {
+                ok: true,
+                json: async () => ({
+                    matrix: [{
+                        consumer: { name: "Frontend", version: { number: "sha1" } },
+                        provider: { name: "GW---API", version: { number: "gwsha1" } }
+                    }]
+                })
+            };
+        }
+
+        if (url.includes("/matrix")) {
+            // canIDeploy checks for Frontend and Frontend---GW -- both deployable here
+            return { ok: true, json: async () => ({ summary: { deployable: true } }) };
+        }
+
+        if (url.includes("/pacts/provider/API/consumer/Frontend---GW/latest")) {
+            return {
+                ok: true,
+                json: async () => ({
+                    consumer: { name: "Frontend---GW" },
+                    provider: { name: "API" }
+                })
+            };
+        }
+
+        if (url.includes("/publish")) {
+            posts.push(JSON.parse(options.body));
+            return { ok: true, json: async () => ({}) };
+        }
+
+        throw new Error(`No mock route for ${options.method || "GET"} ${url}`);
+    };
+
+    return posts;
+}
+
+test("checkGatewayPairs: happy path -- verified, published, deployable", async () => {
+    setEnv();
+    const posts = mockHappyPathBroker();
+
+    const { checkGatewayPairs } = freshModule();
+    const results = await checkGatewayPairs(
+        "https://broker.example.com", "tok", "Frontend", "sha1", "GW",
+        "prod", 0, 0
+    );
+
+    assert.deepStrictEqual(results, [true]);
+    assert.strictEqual(posts.length, 1);
+    assert.strictEqual(posts[0].pacticipantName, "Frontend---GW");
+    assert.strictEqual(posts[0].pacticipantVersionNumber, "sha1-gwsha1");
+});
+
+test("run: end-to-end happy path -- standalone and gateway pair both deployable, no exit", async () => {
+    setEnv();
+    mockHappyPathBroker();
+
+    const { run } = freshModule();
+    await assert.doesNotReject(run());
+});

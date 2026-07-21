@@ -32,22 +32,34 @@ async function getEnvironmentUuid(brokerUrl, token, environment) {
     return env.uuid;
 }
 
-async function getGatewayDownstreams(brokerUrl, token, gatewayName) {
+async function getParticipantNames(brokerUrl, token) {
     const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
-
-    return (data._embedded?.pacticipants || [])
-        .map(p => p.name)
-        .filter(name => name.startsWith(`${gatewayName}---`));
+    return (data._embedded?.pacticipants || []).map(p => p.name).filter(Boolean);
 }
 
-async function recordDeployment(
-    brokerUrl,
-    token,
-    participantName,
-    version,
-    environmentUuid,
-    environment
-) {
+async function getDeployedVersions(brokerUrl, token, participant, environmentUuid) {
+    const url =
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
+        `/currently-deployed-versions/environment/${environmentUuid}`;
+
+    const data = await brokerRequest(url, token);
+
+    return [
+        ...(data._embedded?.versions || []).map(v => v.number),
+        ...(data._links?.["pb:versions"] || []).map(v => v.name || v.title || v.number)
+    ].filter(Boolean);
+}
+
+async function getVersions(brokerUrl, token, participant) {
+    const data = await brokerRequest(
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/versions`,
+        token
+    );
+
+    return (data._embedded?.versions || []).map(v => v.number).filter(Boolean);
+}
+
+async function recordDeployment(brokerUrl, token, participantName, version, environmentUuid, environment) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}` +
         `/versions/${encodeURIComponent(version)}` +
@@ -55,6 +67,57 @@ async function recordDeployment(
 
     await brokerRequest(url, token, "POST", {});
     console.log(`Recorded ${participantName}@${version} in ${environment}`);
+}
+
+function findCompositeVersion(versions, consumerVersion, gatewayVersion) {
+    const exact = `${consumerVersion}-${gatewayVersion}`;
+
+    return versions.find(v => v === exact) ||
+        versions.find(v =>
+            v.startsWith(`${consumerVersion}-`) &&
+            v.endsWith(`-${gatewayVersion}`)
+        );
+}
+
+async function getGatewayDownstreams(brokerUrl, token, gatewayName, participants) {
+    return participants.filter(name => name.startsWith(`${gatewayName}---`));
+}
+
+function getGatewayConsumers(gatewayName, participants) {
+    return participants.filter(name => name.endsWith(`---${gatewayName}`));
+}
+
+// For a single Consumer---GW participant: if Consumer is deployed to this
+// environment, record the matching composite version as deployed here too.
+// If Consumer isn't deployed here at all, this is not an error -- it's simply
+// not relevant to this environment and is skipped.
+async function recordConsumerGatewayPair(brokerUrl, token, participant, consumerName, gatewayVersion, environmentUuid, environment) {
+    const consumerVersions = await getDeployedVersions(brokerUrl, token, consumerName, environmentUuid);
+
+    if (consumerVersions.length === 0) {
+        console.log(`Skipping ${participant}: '${consumerName}' is not deployed to ${environment}`);
+        return;
+    }
+
+    const uniqueVersions = [...new Set(consumerVersions)];
+    if (uniqueVersions.length !== 1) {
+        throw new Error(
+            `Consumer '${consumerName}' has inconsistent deployed versions in ${environment}: ` +
+            uniqueVersions.join(", ")
+        );
+    }
+    const consumerVersion = uniqueVersions[0];
+
+    const versions = await getVersions(brokerUrl, token, participant);
+    const compositeVersion = findCompositeVersion(versions, consumerVersion, gatewayVersion);
+
+    if (!compositeVersion) {
+        throw new Error(
+            `No composite version found for ${participant}, ${consumerVersion} and ${gatewayVersion}`
+        );
+    }
+
+    await recordDeployment(brokerUrl, token, participant, compositeVersion, environmentUuid, environment);
 }
 
 async function run() {
@@ -70,25 +133,40 @@ async function run() {
     if (!gatewayVersion) throw new Error("version is required");
     if (!environment) throw new Error("environment is required");
 
-    const [downstreams, environmentUuid] = await Promise.all([
-        getGatewayDownstreams(brokerUrl, token, gatewayName),
+    const [participants, environmentUuid] = await Promise.all([
+        getParticipantNames(brokerUrl, token),
         getEnvironmentUuid(brokerUrl, token, environment)
     ]);
 
-    console.log(`Found ${downstreams.length} downstream participant(s)`);
+    const downstreams = await getGatewayDownstreams(brokerUrl, token, gatewayName, participants);
+    const consumerGateways = getGatewayConsumers(gatewayName, participants);
 
+    console.log(`Found ${downstreams.length} downstream participant(s)`);
+    console.log(`Found ${consumerGateways.length} consumer-gateway participant(s)`);
+
+    // Record the gateway's own deployment against each downstream provider.
     await Promise.all(
         downstreams.map(name =>
-            recordDeployment(
-                brokerUrl,
-                token,
-                name,
-                gatewayVersion,
-                environmentUuid,
-                environment
-            )
+            recordDeployment(brokerUrl, token, name, gatewayVersion, environmentUuid, environment)
         )
     );
+
+    // Reconcile each Consumer---GW pair: only recorded as deployed here if
+    // the consumer is also deployed here. Each consumer is independent --
+    // one failing consumer doesn't block the others from being recorded.
+    const results = await Promise.allSettled(
+        consumerGateways.map(participant => {
+            const consumerName = participant.slice(0, -(`---${gatewayName}`.length));
+            return recordConsumerGatewayPair(
+                brokerUrl, token, participant, consumerName, gatewayVersion, environmentUuid, environment
+            );
+        })
+    );
+
+    const failures = results.filter(r => r.status === "rejected");
+    if (failures.length > 0) {
+        throw new Error(failures.map(f => f.reason.message).join("; "));
+    }
 }
 
 if (require.main === module) {
@@ -102,7 +180,13 @@ module.exports = {
     getInput,
     brokerRequest,
     getEnvironmentUuid,
-    getGatewayDownstreams,
+    getParticipantNames,
+    getDeployedVersions,
+    getVersions,
     recordDeployment,
+    findCompositeVersion,
+    getGatewayDownstreams,
+    getGatewayConsumers,
+    recordConsumerGatewayPair,
     run
 };
