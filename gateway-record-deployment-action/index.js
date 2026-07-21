@@ -64,17 +64,20 @@ async function recordDeployment(brokerUrl, participantName, version, environment
         `/versions/${encodeURIComponent(version)}` +
         `/deployed-versions/environment/${environmentUuid}`;
 
-    await brokerRequest(url, "POST", {});
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/hal+json, application/json, */*" }, body: "{}" });
+    if (!response.ok) {
+        throw new Error(`Failed to record deployment for ${participantName}@${version}: ${response.status} ${await response.text()}`);
+    }
     console.log(`Recorded ${participantName}@${version} in ${environment}`);
 }
 
 function findCompositeVersion(versions, consumerVersion, gatewayVersion) {
-    const exact = `${consumerVersion}---${gatewayVersion}`;
+    const exact = `${consumerVersion}-${gatewayVersion}`;
 
     return versions.find(v => v === exact) ||
         versions.find(v =>
-            v.startsWith(`${consumerVersion}---`) &&
-            v.endsWith(`---${gatewayVersion}`)
+            v.startsWith(`${consumerVersion}-`) &&
+            v.endsWith(`-${gatewayVersion}`)
         );
 }
 
