@@ -2,11 +2,10 @@ function getInput(name) {
     return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
-async function brokerRequest(url, token, method = "GET", body = null) {
+async function brokerRequest(url, method = "GET", body = null) {
     const response = await fetch(url, {
         method,
         headers: {
-            Authorization: `Bearer ${token}`,
             Accept: "application/hal+json, application/json, */*",
             "Content-Type": "application/json"
         },
@@ -21,25 +20,25 @@ async function brokerRequest(url, token, method = "GET", body = null) {
     return text ? JSON.parse(text) : {};
 }
 
-async function getEnvironmentUuid(brokerUrl, token, environment) {
-    const data = await brokerRequest(`${brokerUrl}/environments`, token);
+async function getEnvironmentUuid(brokerUrl, environment) {
+    const data = await brokerRequest(`${brokerUrl}/environments`);
     const env = (data._embedded?.environments || []).find(e => e.name === environment);
 
     if (!env) throw new Error(`Environment '${environment}' was not found`);
     return env.uuid;
 }
 
-async function getParticipantNames(brokerUrl, token) {
-    const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
+async function getParticipantNames(brokerUrl) {
+    const data = await brokerRequest(`${brokerUrl}/pacticipants`);
     return (data._embedded?.pacticipants || []).map(p => p.name).filter(Boolean);
 }
 
-async function getDeployedVersions(brokerUrl, token, participant, environmentUuid) {
+async function getDeployedVersions(brokerUrl, participant, environmentUuid) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
         `/currently-deployed-versions/environment/${environmentUuid}`;
 
-    const data = await brokerRequest(url, token);
+    const data = await brokerRequest(url);
 
     return [
         ...(data._embedded?.versions || []).map(v => v.number),
@@ -47,22 +46,22 @@ async function getDeployedVersions(brokerUrl, token, participant, environmentUui
     ].filter(Boolean);
 }
 
-async function getVersions(brokerUrl, token, participant) {
+async function getVersions(brokerUrl, participant) {
     const data = await brokerRequest(
-        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/versions`,
-        token
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/versions`
+       
     );
 
     return (data._embedded?.versions || []).map(v => v.number).filter(Boolean);
 }
 
-async function recordDeployment(brokerUrl, token, participant, version, environmentUuid, environment) {
+async function recordDeployment(brokerUrl, participant, version, environmentUuid, environment) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
         `/versions/${encodeURIComponent(version)}` +
         `/deployed-versions/environment/${environmentUuid}`;
 
-    await brokerRequest(url, token, "POST", {});
+    await brokerRequest(url, "POST", {});
     console.log(`Recorded ${participant}@${version} in ${environment}`);
 }
 
@@ -78,20 +77,18 @@ function findCompositeVersion(versions, consumerVersion, gatewayVersion) {
 
 async function run() {
     const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
-    const token = getInput("brokerToken");
     const consumerName = getInput("applicationName");
     const consumerVersion = getInput("version");
     const environment = getInput("environment");
 
     if (!brokerUrl) throw new Error("brokerUrl is required");
-    if (!token) throw new Error("brokerToken is required");
     if (!consumerName) throw new Error("applicationName is required");
     if (!consumerVersion) throw new Error("version is required");
     if (!environment) throw new Error("environment is required");
 
     const [environmentUuid, participants] = await Promise.all([
-        getEnvironmentUuid(brokerUrl, token, environment),
-        getParticipantNames(brokerUrl, token)
+        getEnvironmentUuid(brokerUrl, environment),
+        getParticipantNames(brokerUrl)
     ]);
 
     const consumerGateways = participants.filter(name =>
