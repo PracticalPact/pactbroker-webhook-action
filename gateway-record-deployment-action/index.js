@@ -41,12 +41,19 @@ async function getDeployedVersions(brokerUrl, participant, environmentUuid) {
         `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
         `/currently-deployed-versions/environment/${environmentUuid}`;
 
-    const data = await brokerRequest(url);
-
-    return [
-        ...(data._embedded?.versions || []).map(v => v.number),
-        ...(data._links?.["pb:versions"] || []).map(v => v.name || v.title || v.number)
-    ].filter(Boolean);
+    try {
+        const data = await brokerRequest(url);
+        return [
+            ...(data._embedded?.versions || []).map(v => v.number),
+            ...(data._links?.["pb:versions"] || []).map(v => v.name || v.title || v.number)
+        ].filter(Boolean);
+    } catch (e) {
+        if (e.message.includes("404")) {
+            console.log(`${participant} has no deployment record in this environment — skipping`);
+            return [];
+        }
+        throw e;
+    }
 }
 
 async function getVersions(brokerUrl, participant) {
