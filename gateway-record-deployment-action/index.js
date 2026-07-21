@@ -69,12 +69,12 @@ async function recordDeployment(brokerUrl, participantName, version, environment
 }
 
 function findCompositeVersion(versions, consumerVersion, gatewayVersion) {
-    const exact = `${consumerVersion}-${gatewayVersion}`;
+    const exact = `${consumerVersion}---${gatewayVersion}`;
 
     return versions.find(v => v === exact) ||
         versions.find(v =>
-            v.startsWith(`${consumerVersion}-`) &&
-            v.endsWith(`-${gatewayVersion}`)
+            v.startsWith(`${consumerVersion}---`) &&
+            v.endsWith(`---${gatewayVersion}`)
         );
 }
 
