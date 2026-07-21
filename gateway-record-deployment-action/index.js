@@ -2,11 +2,10 @@ function getInput(name) {
     return process.env[`INPUT_${name.toUpperCase()}`] || "";
 }
 
-async function brokerRequest(url, token, method = "GET", body = null) {
+async function brokerRequest(url, method = "GET", body = null) {
     const options = {
         method,
         headers: {
-            Authorization: `Bearer ${token}`,
             Accept: "application/hal+json, application/json, */*",
             "Content-Type": "application/json"
         }
@@ -24,25 +23,25 @@ async function brokerRequest(url, token, method = "GET", body = null) {
     return text ? JSON.parse(text) : {};
 }
 
-async function getEnvironmentUuid(brokerUrl, token, environment) {
-    const data = await brokerRequest(`${brokerUrl}/environments`, token);
+async function getEnvironmentUuid(brokerUrl, environment) {
+    const data = await brokerRequest(`${brokerUrl}/environments`);
     const env = (data._embedded?.environments || []).find(e => e.name === environment);
 
     if (!env) throw new Error(`Environment '${environment}' was not found`);
     return env.uuid;
 }
 
-async function getParticipantNames(brokerUrl, token) {
-    const data = await brokerRequest(`${brokerUrl}/pacticipants`, token);
+async function getParticipantNames(brokerUrl) {
+    const data = await brokerRequest(`${brokerUrl}/pacticipants`);
     return (data._embedded?.pacticipants || []).map(p => p.name).filter(Boolean);
 }
 
-async function getDeployedVersions(brokerUrl, token, participant, environmentUuid) {
+async function getDeployedVersions(brokerUrl, participant, environmentUuid) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}` +
         `/currently-deployed-versions/environment/${environmentUuid}`;
 
-    const data = await brokerRequest(url, token);
+    const data = await brokerRequest(url);
 
     return [
         ...(data._embedded?.versions || []).map(v => v.number),
@@ -50,22 +49,22 @@ async function getDeployedVersions(brokerUrl, token, participant, environmentUui
     ].filter(Boolean);
 }
 
-async function getVersions(brokerUrl, token, participant) {
+async function getVersions(brokerUrl, participant) {
     const data = await brokerRequest(
-        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/versions`,
-        token
+        `${brokerUrl}/pacticipants/${encodeURIComponent(participant)}/versions`
+       
     );
 
     return (data._embedded?.versions || []).map(v => v.number).filter(Boolean);
 }
 
-async function recordDeployment(brokerUrl, token, participantName, version, environmentUuid, environment) {
+async function recordDeployment(brokerUrl, participantName, version, environmentUuid, environment) {
     const url =
         `${brokerUrl}/pacticipants/${encodeURIComponent(participantName)}` +
         `/versions/${encodeURIComponent(version)}` +
         `/deployed-versions/environment/${environmentUuid}`;
 
-    await brokerRequest(url, token, "POST", {});
+    await brokerRequest(url, "POST", {});
     console.log(`Recorded ${participantName}@${version} in ${environment}`);
 }
 
@@ -79,7 +78,7 @@ function findCompositeVersion(versions, consumerVersion, gatewayVersion) {
         );
 }
 
-async function getGatewayDownstreams(brokerUrl, token, gatewayName, participants) {
+async function getGatewayDownstreams(brokerUrl, gatewayName, participants) {
     return participants.filter(name => name.startsWith(`${gatewayName}---`));
 }
 
@@ -91,8 +90,8 @@ function getGatewayConsumers(gatewayName, participants) {
 // environment, record the matching composite version as deployed here too.
 // If Consumer isn't deployed here at all, this is not an error -- it's simply
 // not relevant to this environment and is skipped.
-async function recordConsumerGatewayPair(brokerUrl, token, participant, consumerName, gatewayVersion, environmentUuid, environment) {
-    const consumerVersions = await getDeployedVersions(brokerUrl, token, consumerName, environmentUuid);
+async function recordConsumerGatewayPair(brokerUrl, participant, consumerName, gatewayVersion, environmentUuid, environment) {
+    const consumerVersions = await getDeployedVersions(brokerUrl, consumerName, environmentUuid);
 
     if (consumerVersions.length === 0) {
         console.log(`Skipping ${participant}: '${consumerName}' is not deployed to ${environment}`);
@@ -108,7 +107,7 @@ async function recordConsumerGatewayPair(brokerUrl, token, participant, consumer
     }
     const consumerVersion = uniqueVersions[0];
 
-    const versions = await getVersions(brokerUrl, token, participant);
+    const versions = await getVersions(brokerUrl, participant);
     const compositeVersion = findCompositeVersion(versions, consumerVersion, gatewayVersion);
 
     if (!compositeVersion) {
@@ -117,28 +116,26 @@ async function recordConsumerGatewayPair(brokerUrl, token, participant, consumer
         );
     }
 
-    await recordDeployment(brokerUrl, token, participant, compositeVersion, environmentUuid, environment);
+    await recordDeployment(brokerUrl, participant, compositeVersion, environmentUuid, environment);
 }
 
 async function run() {
     const brokerUrl = getInput("brokerUrl").replace(/\/+$/, "");
-    const token = getInput("brokerToken");
     const gatewayName = getInput("applicationName");
     const gatewayVersion = getInput("version");
     const environment = getInput("environment");
 
     if (!brokerUrl) throw new Error("brokerUrl is required");
-    if (!token) throw new Error("brokerToken is required");
     if (!gatewayName) throw new Error("applicationName is required");
     if (!gatewayVersion) throw new Error("version is required");
     if (!environment) throw new Error("environment is required");
 
     const [participants, environmentUuid] = await Promise.all([
-        getParticipantNames(brokerUrl, token),
-        getEnvironmentUuid(brokerUrl, token, environment)
+        getParticipantNames(brokerUrl),
+        getEnvironmentUuid(brokerUrl, environment)
     ]);
 
-    const downstreams = await getGatewayDownstreams(brokerUrl, token, gatewayName, participants);
+    const downstreams = await getGatewayDownstreams(brokerUrl, gatewayName, participants);
     const consumerGateways = getGatewayConsumers(gatewayName, participants);
 
     console.log(`Found ${downstreams.length} downstream participant(s)`);
@@ -147,7 +144,7 @@ async function run() {
     // Record the gateway's own deployment against each downstream provider.
     await Promise.all(
         downstreams.map(name =>
-            recordDeployment(brokerUrl, token, name, gatewayVersion, environmentUuid, environment)
+            recordDeployment(brokerUrl, name, gatewayVersion, environmentUuid, environment)
         )
     );
 
@@ -158,7 +155,7 @@ async function run() {
         consumerGateways.map(participant => {
             const consumerName = participant.slice(0, -(`---${gatewayName}`.length));
             return recordConsumerGatewayPair(
-                brokerUrl, token, participant, consumerName, gatewayVersion, environmentUuid, environment
+                brokerUrl, participant, consumerName, gatewayVersion, environmentUuid, environment
             );
         })
     );
